@@ -130,7 +130,7 @@ fi
 
 section "Configuring hugepages"
 
-python3 "$VANILLA_DIR/usertools/dpdk-hugepages.py" -p 2M --setup "${HUGEPAGE_COUNT}"
+python3 "$VANILLA_DIR/usertools/dpdk-hugepages.py" -p 2M --setup "$((HUGEPAGE_COUNT * 2))M"
 python3 "$VANILLA_DIR/usertools/dpdk-hugepages.py" -s
 
 log "Reserved ${HUGEPAGE_COUNT} x 2MB hugepages (runtime-only; lost on reboot)."
