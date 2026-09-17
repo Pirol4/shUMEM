@@ -119,6 +119,16 @@ The key restructuring: in stock DPDK the Rx ring plays a **dual role** — it bo
 
 &nbsp;
 
+### 8.1 Node type and topology (fixed by `profile.py`)
+
+- `profile.py` pins the node type to **`sm110p`** (Xeon Silver 4314, single NUMA node, 32 logical CPUs, ConnectX-6 Dx 100Gb) on the **Wisconsin** CloudLab cluster (`*.wisc.cloudlab.us`) — this answers open question §9.1's "which profile" half. **DDIO support is expected for this Xeon Scalable generation but has not been independently measured yet** — do not treat it as confirmed until the Phase 0 measurement harness (§11) checks it via PCM/PMU counters.
+- The profile allocates exactly two roles, **`dut`** and **`tgen`**, each with a `/mydata` blockstore (100GB) and two Mellanox NICs:
+  - A **ConnectX-6 Lx** — the control-plane NIC, DHCP-assigned on the shared cluster network, carries SSH. **Never point DPDK/EAL at this one.**
+  - A **ConnectX-6 Dx** — the 100Gb **experiment NIC**, wired as a dedicated back-to-back link declared in the RSpec as `experiment-link` (VLAN-tagged, `best_effort`), private subnet `10.10.1.0/24` with **no default route**. It physically connects only `dut:experiment-nic` <-> `tgen:experiment-nic` and cannot reach the campus network, the CloudLab control plane, or any other experiment — safe to saturate at line rate.
+- **PCI addresses and interface names are not guaranteed stable across re-instantiations** — always re-derive them with the recipe in §14.2 rather than hardcoding. For reference, this is what was observed on the instantiation validated in §14.4: experiment NIC (Dx) = `0000:51:00.0` on both nodes (`dut` = `10.10.1.1`, MAC `b8:3f:d2:13:08:a6`; `tgen` = `10.10.1.2`, MAC `b8:3f:d2:13:08:ae`); control NIC (Lx) = `0000:8a:00.x` on both nodes.
+
+&nbsp;
+
 ---
 
 ## 9\. Open questions to resolve BEFORE writing code
@@ -127,7 +137,7 @@ Answer these by reading the source and, where needed, running small probes. Do n
 
 &nbsp;
 
-1. **DDIO node.** Which specific CloudLab Intel \+ 100 Gbps NIC profile do we use? (blocking — see §8)  
+1. **DDIO node.** ✅ Node type fixed by `profile.py`: `sm110p` (see §8.1). Still open: independently confirm DDIO is active for this generation via PCM/PMU counters, not just assumed from CPU spec (fold into the §11 measurement harness).  
 2. **Fork point.** Do we build on `shRing-dpdk` and add the allocator, or start from vanilla DPDK and port only what we need? Decide after diffing them.  
 3. **mlx5 Rx path.** Where exactly does the mlx5 PMD refill the Rx ring from the mempool? What is the smallest hook point to insert a FILL/credit step without rewriting the datapath?  
 4. **UMEM \= mempool?** Confirm that a single shared `rte_mempool` is the right "UMEM" abstraction, and how per-core FILL rings draw from it.  
@@ -145,6 +155,8 @@ Each phase has an explicit **Done when** so we know it is complete.
 &nbsp;
 
 - **Phase 0 — Environment & baselines.** Pick the DDIO node (§8). Build vanilla DPDK, shRing, and rxBisect. Run `l3fwd` on each and capture the measurement harness (throughput, latency, loss, and an LLC/bandwidth counter). *Done when:* all three baselines run `l3fwd` reproducibly and we log the same metrics for each.  
+  &nbsp;  
+  **Status:** environment setup is validated end-to-end (§14) — vanilla DPDK builds and a real cross-node packet test passed on both nodes. **Not done yet:** shRing/rxBisect are not built (`INSTALL_COMPARISON_DPDKS` still `false`), and no `l3fwd` baseline runs or metric logging have happened — that is the remaining work for this phase.  
   &nbsp;  
 - **Phase 1 — Single FILL/RX pair, static UMEM slice.** One core, one FILL/RX pair drawing empties from a shared UMEM (a fixed slice). Prove the decoupled mechanism works and forwards packets. *Done when:* one core forwards traffic via the decoupled FILL/RX path with no loss at a modest rate, matching vanilla correctness.  
   &nbsp;  
@@ -193,5 +205,108 @@ At the start of a development session, before coding:
 2. Confirm the CloudLab node and that DDIO is available (§8).  
 3. Re-read the relevant part of the shRing/DPDK source for the change at hand.  
 4. Propose the change with a deep explanation first; I apply it manually, one step at a time.
+
+&nbsp;
+
+---
+
+## 14\. Environment setup runbook (run after every fresh CloudLab instantiation)
+
+This section exists so a fresh instantiation never re-discovers the same bugs from scratch. Follow it in order before touching any experiment code.
+
+&nbsp;
+
+### 14.1 Run the setup script on both nodes
+
+SSH into each node and run, once per node (idempotent — safe to re-run; heavy steps like clone/build are skipped if already done):
+
+```bash
+sudo setup/dev-environment.sh dut     # on the dut node
+sudo setup/dev-environment.sh tgen    # on the tgen node
+```
+
+**Bugs already fixed in this script (kept here as history, in case a similar script is written later):**
+
+- `linux-cpupower` is **not a real Ubuntu/Debian package** — that name is from Fedora/RHEL (`kernel-tools`). On Ubuntu, `cpupower` ships inside `linux-tools-common` + `linux-tools-$(uname -r)` + `linux-tools-generic`, which the script already installs. Adding `linux-cpupower` to the `apt-get install` list makes the whole install fail (`set -euo pipefail` aborts the script right there).
+- `dpdk-hugepages.py --setup` expects the **total memory size to reserve** (e.g. `8192M`, `8G`), **not a page count**. Passing a raw page count (e.g. `4096`) gets silently parsed as a byte count and fails with `Huge reservation 4Kb is not a multiple of page size 2Mb`. The fix: compute the size explicitly, e.g. `--setup "$((HUGEPAGE_COUNT * 2))M"` when `HUGEPAGE_COUNT` is a number of 2MB pages.
+
+&nbsp;
+
+### 14.2 Identify the control-plane NIC vs. the experiment NIC (do this every time — do not assume PCI addresses or interface names carry over between instantiations)
+
+**Find the control-plane NIC** (the one carrying your SSH session — never point DPDK at it):
+
+```bash
+read -r CLIENT_IP CLIENT_PORT SERVER_IP SERVER_PORT <<< "$SSH_CONNECTION"
+ip route get "$CLIENT_IP"        # the "dev <iface>" shown is the control NIC
+```
+
+**Find the experiment NIC** (the ConnectX-6 Dx on the private `10.10.1.0/24` link):
+
+```bash
+# profile.py assigns dut=10.10.1.1, tgen=10.10.1.2 statically — confirm via the manifest if unsure:
+geni-get manifest | grep -A2 experiment-nic
+
+IFACE=$(ip -o -4 addr show | awk '/10\.10\.1\./{print $2}')
+ethtool -i "$IFACE" | grep bus-info      # PCI address to pass as `-a` to DPDK/EAL
+```
+
+**Verify isolation before generating any real traffic** (must show only the local subnet, no `default`):
+
+```bash
+ip route show dev "$IFACE"
+```
+
+&nbsp;
+
+### 14.3 Sanity-check the build (in order — each step touches more of the stack)
+
+1. **No hardware touched** — confirms the build and hugepages alone:
+   ```bash
+   sudo ./build/app/dpdk-testpmd -l 0-1 -n 4 --no-pci -- -i
+   ```
+   Should reach the `testpmd>` prompt with no errors. `quit` to exit.
+
+2. **Real port, one node, no traffic** — confirms the mlx5 PMD initializes the experiment NIC:
+   ```bash
+   sudo ./build/app/dpdk-testpmd -l 0-3 -n 4 -a <pci-addr-from-14.2> -- -i
+   testpmd> show port info 0     # expect: Link status: up, Link speed: 100 Gbps
+   testpmd> quit
+   ```
+
+3. **Paired end-to-end test** — two SSH sessions, one per node, confirms the full cross-node path:
+
+   On `dut` (start first, leave running):
+   ```bash
+   sudo ./build/app/dpdk-testpmd -l 0-3 -n 4 -a <dut-pci> -- -i --forward-mode=rxonly
+   testpmd> start
+   ```
+
+   On `tgen` (in a separate session):
+   ```bash
+   sudo ./build/app/dpdk-testpmd -l 0-3 -n 4 -a <tgen-pci> -- -i --forward-mode=txonly --eth-peer=0,<dut-experiment-nic-mac>
+   testpmd> start
+   # wait ~5s
+   testpmd> stop
+   testpmd> show port stats all   # note TX-packets
+   testpmd> quit
+   ```
+
+   Back on `dut`:
+   ```bash
+   testpmd> stop
+   testpmd> show port stats all   # RX-packets should be close to tgen's TX-packets
+   testpmd> quit
+   ```
+
+&nbsp;
+
+### 14.4 Last validated run (reference only — re-run 14.2–14.3 fresh each instantiation, do not assume these values still hold)
+
+- Node type: `sm110p`, Wisconsin cluster.
+- Control NIC: ConnectX-6 Lx, PCI `0000:8a:00.0` (`dut` and `tgen` both), interface `ens1f0np0`.
+- Experiment NIC: ConnectX-6 Dx, PCI `0000:51:00.0` (`dut` and `tgen` both), interface `ens2f0np0`.
+- `dut` experiment IP `10.10.1.1` (MAC `b8:3f:d2:13:08:a6`); `tgen` experiment IP `10.10.1.2` (MAC `b8:3f:d2:13:08:ae`).
+- Result: `tgen` `txonly` sent ~1.16B 64B packets (single core, software-bound — the resulting `TX-dropped` count is expected and not a hardware fault); `dut` `rxonly` received ~1.0B packets. Confirms the DPDK build, the mlx5 PMD, and the isolated cross-node link all work correctly.
 
 &nbsp;
