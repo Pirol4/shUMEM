@@ -60,7 +60,7 @@ apt-get install -y -qq \
     "linux-headers-$(uname -r)" libnuma-dev numactl \
     rdma-core libibverbs-dev librdmacm-dev ibverbs-utils libmlx5-1 \
     ethtool pciutils msr-tools \
-    linux-tools-common "linux-tools-$(uname -r)" linux-tools-generic linux-cpupower
+    linux-tools-common "linux-tools-$(uname -r)" linux-tools-generic
 
 log "Base packages installed."
 
