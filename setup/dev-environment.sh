@@ -155,6 +155,15 @@ clone_at_ref() {
 # matters when the thesis claims these trees are the published baselines.
 apply_patches() {
     local dir="$1" label="$2" patch
+    # Without this guard a missing or stale checkout makes the loop below a
+    # silent no-op, and the build dies ~20 minutes later with an `ar x` error
+    # whose cause is nowhere near the symptom.
+    if [[ ! -d "$PATCH_DIR" ]] || ! compgen -G "$PATCH_DIR/*.patch" >/dev/null; then
+        echo "ERROR: no patches found in $PATCH_DIR" >&2
+        echo "       DPDK 21.05 will not build without them. If this checkout is" >&2
+        echo "       stale, run: cd $SCRIPT_DIR/.. && sudo git pull" >&2
+        exit 1
+    fi
     shopt -s nullglob
     for patch in "$PATCH_DIR"/*.patch; do
         if ( cd "$dir" && git apply --reverse --check "$patch" ) 2>/dev/null; then
@@ -215,7 +224,12 @@ if [[ "$ROLE" == "dut" ]]; then
     if [[ -x "$PCM_DIR/build/bin/pcm" ]]; then
         log "PCM already built (skipping)."
     else
-        clone_if_missing "https://github.com/intel/pcm.git" "$PCM_DIR"
+        # PCM is a measurement tool, not a baseline, so it tracks upstream
+        # rather than being pinned to a commit like the DPDK trees.
+        if [[ ! -d "$PCM_DIR/.git" ]]; then
+            log "Cloning Intel PCM into $PCM_DIR"
+            git clone --recursive https://github.com/intel/pcm.git "$PCM_DIR"
+        fi
         ( cd "$PCM_DIR" && mkdir -p build && cd build && cmake .. && cmake --build . --parallel "$(nproc)" )
         log "PCM build complete: $PCM_DIR/build"
     fi
