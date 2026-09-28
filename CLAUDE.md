@@ -182,11 +182,30 @@ Each phase has an explicit **Done when** so we know it is complete.
 
 ## 11\. Evaluation methodology
 
-- **Common benchmark:** DPDK `l3fwd` — it already exists in all four systems, so it runs the same workload everywhere and yields comparable results.  
-- **Systems compared:** vanilla DPDK, shRing, rxBisect, ours.  
-- **Load regimes:** balanced **and** imbalanced (imbalance is where shRing is expected to degrade and where our allocator should win).  
-- **Metrics:** throughput, latency (incl. tail), packet loss, and a working-set / LLC-pressure signal (memory bandwidth or LLC-miss counters).  
-- **Fairness:** identical node, NIC, core counts, ring sizes, and traffic across systems; change one variable at a time.
+- **Common benchmark:** DPDK `l3fwd`, and it must be l3fwd rather than testpmd — shRing's `rx_contention` counter is only printed by the patched `l3fwd` (§15.3). It is also the benchmark both papers use.
+
+&nbsp;
+
+**Systems measured — four, all from the shRing tree, all with the §15 devargs:**
+
+| # | System | How |
+|---|---|---|
+| 1 | privRing | `rmp_en=0`, per-core Rx ring of 1 Ki |
+| 2 | **small privRing** | `rmp_en=0`, per-core ring shrunk 8× (1 Ki → 128) |
+| 3 | shRing | `rmp_en=1,rqs_per_rmp=N` |
+| 4 | ours | to be built |
+
+**Do not skip #2.** The rxBisect paper carries it precisely because it has the *same I/O working set* as shRing while sharing nothing. Without it, any gain we measure is confounded: it is impossible to say whether the benefit came from sharing buffers or merely from a smaller ring. The paper's own finding is that small privRing gets the working set right but cannot absorb bursts — which is exactly the gap our allocator claims to close, so it is our most important baseline, not an optional extra.
+
+**rxBisect is not measured.** It requires NIC ASIC changes and its paper evaluates it through a software emulation framework that was never published (no artifact, no repository). It appears in this thesis as a *cited* design reference and upper bound — never in the same table as our measured numbers. The framing: rxBisect shows the principle works if the ASIC changes; we show how much of that is reachable in software on a commodity NIC.
+
+&nbsp;
+
+- **Packet size: 1500 B.** Not 64 B. The rxBisect paper is explicit that it evaluates larger packets "to stress the memory subsystem" — at 64 B the bottleneck is the CPU and the working-set effect this project studies is invisible. Our own 64 B runs confirmed this (§15.2).
+- **Load regimes:** balanced **and** imbalanced. The reference imbalance is the CAIDA 2018-03-15 NYC trace replayed by TRex, where the per-core min/max packet-rate ratio stays between 325–433%. CAIDA access needs a request with lead time.
+- **Core count:** 8 per NIC, matching both papers.
+- **Metrics — five, as in the rxBisect paper's Figure 10:** throughput (RFC2544 no-drop), latency including tail, ring occupancy, memory bandwidth (`pcm-memory`), and DDIO hit rate (`pcm-pcie`). The last three explain the mechanism; throughput and latency alone do not support the argument. `rx_contention` is a sixth, specific to quantifying shRing's bottleneck.
+- **Fairness:** identical node, NIC, core counts, ring sizes, application and traffic; change one variable at a time. Critically, **`rx_vec_en=0` and `rxq_cqe_comp_en=0` on every system**, not just shRing — see §15.1 for why leaving them on for privRing would invalidate the whole comparison.
 
 &nbsp;
 
@@ -240,6 +259,7 @@ sudo setup/dev-environment.sh tgen    # on the tgen node
 - `linux-cpupower` is **not a real Ubuntu/Debian package** — that name is from Fedora/RHEL (`kernel-tools`). On Ubuntu, `cpupower` ships inside `linux-tools-common` + `linux-tools-$(uname -r)` + `linux-tools-generic`, which the script already installs. Adding `linux-cpupower` to the `apt-get install` list makes the whole install fail (`set -euo pipefail` aborts the script right there).
 - `dpdk-hugepages.py --setup` expects the **total memory size to reserve** (e.g. `8192M`, `8G`), **not a page count**. Passing a raw page count (e.g. `4096`) gets silently parsed as a byte count and fails with `Huge reservation 4Kb is not a multiple of page size 2Mb`. The fix: compute the size explicitly, e.g. `--setup "$((HUGEPAGE_COUNT * 2))M"` when `HUGEPAGE_COUNT` is a number of 2MB pages.
 - **Do not narrow the build with `-Denable_drivers=net/mlx5`.** On DPDK 21.05 that option does not resolve dependencies: it produced a configure with `net:` *empty* and no mempool driver either (286 targets instead of 2138), exit code 0 and no warning. The resulting build is useless and only fails at runtime. Build the full tree.
+- **Two build messages are expected and harmless.** `mlx5_net: Failed to init cache list FDB_ingress_0_0_matcher_cache entry (nil)` prints ~5 times at every port start, under both privRing and shRing, and does not affect the datapath — traffic runs at line rate with it present. `EAL: Error: Invalid memory` prints 3 times while l3fwd shuts down, after the statistics are already out. Neither has been investigated; ignore them unless something else is actually wrong.
 - **DPDK 21.05 does not build unmodified on Ubuntu 22.04's toolchain, and `setup/patches/` fixes it.** The script applies every patch there to both trees, idempotently. The failure, if you ever see it raw: `ar: 'x' cannot be used on thin archives.` Cause: meson 0.61+ builds *uninstalled* static libraries as **thin archives** (`LINK_ARGS = csrDT`, versus `csrD` for the rest), and DPDK 21.05's `buildtools/gen-pmdinfo-cfile.py` calls `ar x`, which GNU ar refuses on those. It hits `libtmp_rte_common_mlx5.a`, so skipping unrelated drivers does not dodge it. Note this is a **meson** problem, not a binutils one — meson 0.53.2 (Ubuntu 20.04) has no thin-archive logic at all, 0.61.2 (22.04) does. The C sources are fine: they compile clean even under gcc 13 with zero compiler errors. The fix is the upstream one, backported verbatim from DPDK 23.11.
 - **Verification of that patch (2026-09-28):** on Ubuntu 24.04 / binutils 2.42 / meson 1.3.2 / gcc 13 — harsher than the 22.04 target — the shRing tree goes from a failing build to `ninja exit=0`, zero failed targets, producing `librte_net_mlx5.a`, `dpdk-l3fwd` and `dpdk-testpmd`.
 
@@ -331,6 +351,17 @@ ip route show dev "$IFACE"
 - Control NIC: ConnectX-6 Lx, PCI `0000:8a:00.0` (`dut` and `tgen` both), interface `ens1f0np0`.
 - Experiment NIC: ConnectX-6 Dx, PCI `0000:51:00.0` (`dut` and `tgen` both), interface `ens2f0np0`.
 - `dut` experiment IP `10.10.1.1` (MAC `b8:3f:d2:13:08:a6`); `tgen` experiment IP `10.10.1.2` (MAC `b8:3f:d2:13:08:ae`).
+
+&nbsp;
+
+**Instantiation live as of 2026-09-28** (the one all of §15 was measured on). Interface `ens2f0np0` and PCI `0000:51:00.0` on both nodes, same as before — but **the MACs changed**, which is exactly why §14.2 says to re-derive rather than reuse:
+
+| | interface | PCI | MAC |
+|---|---|---|---|
+| `dut` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:04:82` |
+| `tgen` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:04:7e` |
+
+Re-derive with §14.2 after any re-instantiation; these are recorded only to save a step while this instantiation is up.
 - Result: `tgen` `txonly` sent ~1.16B 64B packets (single core, software-bound — the resulting `TX-dropped` count is expected and not a hardware fault); `dut` `rxonly` received ~1.0B packets. Confirms the DPDK build, the mlx5 PMD, and the isolated cross-node link all work correctly.
 
 &nbsp;
@@ -411,5 +442,45 @@ From the paper's own setup section: *"we use default application settings: 1024 
 | Load generator | TRex (patched for 1 µs latency accuracy) | testpmd `txonly` | **open (P3)** |
 
 The four open rows are tuning, not correctness — none of them block development, but all of them must be closed before any number goes into the thesis.
+
+&nbsp;
+
+**Careful reading the §15.2 table.** The privRing row was measured with testpmd and the shRing rows with l3fwd, over different time windows. It establishes *works* versus *starves*, nothing more — the two systems have **not** been compared to each other yet. That comparison is what the harness is for, and it requires identical application, identical window and identical offered load.
+
+&nbsp;
+
+### 15.6 Known defects in the shRing artifact
+
+Latent problems in the code we run as a baseline. Recorded because they may surface later, and because a thesis comparing against this artifact should be able to state what is in it.
+
+- **Invalid C memory order in the shared-ring hot path.** `mlx5_rx.c:1134` does `__atomic_store_n(..., 0, __ATOMIC_ACQUIRE)`. Acquire is not a valid order for a *store* — only relaxed, release and seq_cst are — and gcc flags it (`-Winvalid-memory-model`) on every build. **Open question: what gcc actually emits for the invalid order.** If it falls back to seq_cst, shRing pays a full barrier every 64 received packets on its most contended path, which would make our shRing measurably slower than the paper's for reasons that have nothing to do with the design. Settle it before publishing any shRing number: compile a store under acquire/release/seq_cst and compare the assembly (on x86-64 a release or relaxed store is a plain `mov`; seq_cst is `xchg` or `mov`+`mfence`).
+- **Double shift in the RMP + MPRQ allocation** — see §15.4. Deliberately unpatched.
+- **Research-grade code in general.** Debug `printf`s on the datapath (`!!!! Creating RMP !!!!`), commented-out blocks, a `TODO: hidden assumption about (THRESHOLD % 64 == 0)` in the doorbell logic, and a typo in a driver error string. Read before trusting; do not assume any given path was exercised.
+
+&nbsp;
+
+---
+
+## 16\. Traffic generator (Phase 0, item P3 — not installed yet)
+
+testpmd cannot do what §11 requires: no RFC2544 no-drop search, no tail latency, and `--txonly-multi-flow` gives no control over flow skew, which is precisely the imbalance regime where this project's contribution is supposed to win. The shRing paper uses **Cisco TRex**, so does the rxBisect paper, and it covers all three needs.
+
+Researched 2026-09-28, not yet executed:
+
+- **Version: v3.07.** TRex documents Mellanox compatibility per release, and v3.07 is the one listed against Ubuntu 22.04. Pin it rather than `latest`, for the same reason the DPDK trees are pinned.
+- **Do not install MLNX_OFED.** The compatibility table names OFED 25.07, but the same document offers *"RDMA Core library with a recent enough Linux kernel release (recommended)"* as the alternative. Ubuntu 22.04 ships rdma-core 39 against a minimum of 16, and §15 proves mlx5 already works on this node with it. Installing MLNX_OFED would replace the system rdma-core and put a working setup at risk.
+- **The download needs `--no-check-certificate`.** `trex-tgn.cisco.com` serves an incomplete chain — the leaf is a valid Cisco certificate (`CN = trex-tgn.cisco.com, O = Cisco Systems Inc.`) but the intermediate to `IdenTrust Commercial Root CA 1` is missing, so verification fails with code 21. This is a server misconfiguration and it is why TRex's own instructions disable verification; the cost is that the download cannot be cryptographically traced to Cisco. Building from the GitHub source is the alternative if that matters.
+- **The Mellanox port stays on the kernel `mlx5_core` driver**, exactly as with DPDK here — there is no `dpdk-devbind` step. TRex takes PCI addresses directly in `interfaces:` in `/etc/trex_cfg.yaml`, discovered with `sudo ./dpdk_setup_ports.py -t`.
+- **Latency accuracy.** The shRing paper notes it modified TRex to improve latency measurement from 10–100 µs to 1 µs. Stock TRex is fine for throughput and loss; that modification becomes relevant only if the thesis claims tail latency.
+
+First steps, on `tgen`, with no testpmd running:
+
+```bash
+cd /mydata && sudo wget --no-check-certificate https://trex-tgn.cisco.com/trex/release/v3.07.tar.gz
+cd /mydata && sudo tar -xzf v3.07.tar.gz
+cd /mydata/v3.07 && sudo ./dpdk_setup_ports.py -t
+```
+
+The output of that last command supplies the values for `/etc/trex_cfg.yaml`; do not write the config from guesses.
 
 &nbsp;
