@@ -145,7 +145,7 @@ Answer these by reading the source and, where needed, running small probes. Do n
 
 &nbsp;
 
-1. **DDIO node.** ✅ Node type fixed by `profile.py`: `sm110p` (see §8.1). Still open: independently confirm DDIO is active for this generation via PCM/PMU counters, not just assumed from CPU spec (fold into the §11 measurement harness).  
+1. **DDIO node.** ✅ Node type fixed by `profile.py`: `sm110p` (see §8.1). ✅ **Instrumentation confirmed (2026-09-28):** PCM reads this node's uncore — `pcm-pcie` returns `PCIRdCur` / `ItoM` / `ItoMCacheNear`, which are the DDIO events, and `pcm-memory` reports all 8 memory channels. Still open: the *value* of `|DDIO|` here. Measure it empirically rather than from an MSR whose address is microarchitecture-specific — sweep the ring size under load and find the knee where `pcm-memory` bandwidth rises and the `pcm-pcie` hit ratio falls, which is the paper's Figure 3 experiment. That needs the traffic generator first (§10, Phase 0). For reference, the shRing paper runs with **2 DDIO ways** (of 11, on a 22 MiB LLC ≈ 4 MiB).  
 2. **Fork point.** ✅ **RESOLVED (2026-09-28): build on `shRing-dpdk`.** Diffing it against upstream settles it. `git merge-base` lands exactly on the `v21.05` release commit (`175af2573`), so the fork is clean and its whole delta is 13 commits / 26 files / ~3.1k inserted lines. Decisively, every shRing datapath change is gated behind the `rmp_en` devarg and adds *separate* burst functions (`mlx5_rx_burst_rmp`, `mlx5_rx_burst_rmp_mprq`) rather than altering the stock ones — so **one binary yields both baselines**: `rmp_en=0` is privRing, `rmp_en=1,rqs_per_rmp=N` is shRing. Building here removes the DPDK-version confounder from the comparison entirely. The vanilla `v21.05` tree is kept only to validate that equivalence and to diff against while reading. Caveat: shRing also patches `examples/l3fwd`, so the two trees' `l3fwd` binaries are **not** identical — hence the validation is required, not assumed.  
 3. **mlx5 Rx path.** Where exactly does the mlx5 PMD refill the Rx ring from the mempool? What is the smallest hook point to insert a FILL/credit step without rewriting the datapath?  
 4. **UMEM \= mempool?** Confirm that a single shared `rte_mempool` is the right "UMEM" abstraction, and how per-core FILL rings draw from it.  
@@ -164,7 +164,9 @@ Each phase has an explicit **Done when** so we know it is complete.
 
 - **Phase 0 — Environment & baselines.** Pick the DDIO node (§8). Build vanilla DPDK, shRing, and rxBisect. Run `l3fwd` on each and capture the measurement harness (throughput, latency, loss, and an LLC/bandwidth counter). *Done when:* all three baselines run `l3fwd` reproducibly and we log the same metrics for each.  
   &nbsp;  
-  **Status:** environment setup is validated end-to-end (§14) — vanilla DPDK builds and a real cross-node packet test passed on both nodes. **Not done yet:** shRing/rxBisect are not built (`INSTALL_COMPARISON_DPDKS` still `false`), and no `l3fwd` baseline runs or metric logging have happened — that is the remaining work for this phase.  
+  **Status (2026-09-28).** Both baselines run. The shRing tree builds (§14.1), and `l3fwd` forwards 1500 B traffic at line rate with zero loss under **both** privRing and shRing, from the same binary — the configuration and its two mandatory devargs are in §15. Intel PCM reads the uncore counters on `sm110p` (16 CHA/CBO, 6 IIO/IRP, 8 memory channels), so `pcm`, `pcm-memory` and `pcm-pcie` all return real data. rxBisect is out as a measured baseline (§11).
+  &nbsp;
+  **Remaining for this phase:** (1) a traffic generator that can do RFC2544 no-drop, tail latency and controlled imbalance — testpmd does none of these, so TRex is needed; (2) measure `|DDIO|` on this node, which closes §9.1 and supplies the constant in §15.5; (3) the measurement harness itself — a script taking (system, cores, ring size, load regime) and emitting one comparable row; (4) close the tuning gaps in §15.5 (1 GiB hugepages, hyperthreading off, `isolcpus`, pause frames).  
   &nbsp;  
 - **Phase 1 — Single FILL/RX pair, static UMEM slice.** One core, one FILL/RX pair drawing empties from a shared UMEM (a fixed slice). Prove the decoupled mechanism works and forwards packets. *Done when:* one core forwards traffic via the decoupled FILL/RX path with no loss at a modest rate, matching vanilla correctness.  
   &nbsp;  
@@ -330,5 +332,84 @@ ip route show dev "$IFACE"
 - Experiment NIC: ConnectX-6 Dx, PCI `0000:51:00.0` (`dut` and `tgen` both), interface `ens2f0np0`.
 - `dut` experiment IP `10.10.1.1` (MAC `b8:3f:d2:13:08:a6`); `tgen` experiment IP `10.10.1.2` (MAC `b8:3f:d2:13:08:ae`).
 - Result: `tgen` `txonly` sent ~1.16B 64B packets (single core, software-bound — the resulting `TX-dropped` count is expected and not a hardware fault); `dut` `rxonly` received ~1.0B packets. Confirms the DPDK build, the mlx5 PMD, and the isolated cross-node link all work correctly.
+
+&nbsp;
+
+---
+
+## 15\. Baseline configuration (validated 2026-09-28 — do not change without re-validating)
+
+Both baselines come from the **shRing tree**, same binary, differing only in devargs. This is what removes the DPDK-version confounder (see §9.2).
+
+```
+privRing :  -a <pci>,rmp_en=0,rx_vec_en=0,rxq_cqe_comp_en=0
+shRing   :  -a <pci>,rmp_en=1,rqs_per_rmp=N,rx_vec_en=0,rxq_cqe_comp_en=0
+```
+
+&nbsp;
+
+### 15.1 Why `rx_vec_en=0` and `rxq_cqe_comp_en=0` are mandatory on BOTH
+
+shRing is incompatible with two mlx5 fast-path features. **Neither incompatibility is documented in the paper**; both were found empirically here.
+
+- **Vectorized Rx.** `mlx5_rxq.c:151` rejects the combination outright: `if (rmp && mlx5_rxq_check_vec_support(...) > 0)` → `RMP + VEC is not supproted yet`, and the port fails to start. There are simply no vectorized RMP burst functions — `mlx5_select_rx_function()` offers `mlx5_rx_burst_rmp` and `mlx5_rx_burst_rmp_mprq`, but the vector branch has no RMP variant.
+- **CQE compression.** This one fails *silently and catastrophically*, which makes it the dangerous one. With compression on (the mlx5 default), the shared ring is filled once and never replenished: the receive path delivers roughly one ring's worth of packets and then starves forever while the NIC drops everything into `rx_missed_errors`. There is no error message.
+
+**The methodological point: these flags must be set on privRing too.** Both are performance features. Running shRing without them and privRing with them measures vectorization and CQE compression, not ring sharing — the comparison would be worthless.
+
+&nbsp;
+
+### 15.2 The CQE-compression failure, for whoever hits it again
+
+Measured at 1500 B, 100 Gbps line rate, 4 cores / 4 queues, one shared RMP:
+
+| Configuration | Packets delivered | Loss |
+|---|---|---|
+| privRing (any) | 187,619,086 | **0%** |
+| shRing, `rxq_cqe_comp_en=1`, `rxd=2048`, testpmd | 6,191 | 99.995% |
+| shRing, `rxq_cqe_comp_en=1`, `rxd=1024`, testpmd | 1,023 | 99.999% |
+| shRing, `rxq_cqe_comp_en=1`, `rxd=1024`, l3fwd | 9,471 | 99.994% |
+| shRing, **`rxq_cqe_comp_en=0`**, `rxd=1024`, l3fwd | **81,721,361** | **0%** |
+
+The signature is unmistakable once seen: `rx_good_packets` lands on roughly the ring size (1,023 for a 1024-entry RMP), `rx_missed_errors` absorbs everything else, and `rx_phy_discard_packets` and `rx_out_of_buffer` both stay at **0** — the NIC is healthy, software just never returns descriptors. `contention` stays at 1, proving the doorbell path barely ran. The mechanism is the in-sequence doorbell in `mlx5_rx_burst_rmp` (`mlx5_rx.c:1128`), which only rings once 64 *consecutive* ring entries complete.
+
+Note that it **does** work with CQE compression at 64 B packets (235 M received), so a small-packet smoke test will not catch this. Always validate at 1500 B.
+
+&nbsp;
+
+### 15.3 Working run, for reference
+
+`rmp_en=1,rqs_per_rmp=4,rx_vec_en=0,rxq_cqe_comp_en=0`, l3fwd, 4 cores, `rxd=1024`, 1500 B at line rate:
+
+- 81,721,361 packets received **and forwarded**, `rx_missed_errors` = 0
+- per-queue: 20,430,353 / 20,430,336 / 20,430,336 / 20,430,336 — four cores sharing one RMP, RSS spread under 0.001%
+- `contention` = 12,366 — the shared-ring CAS counter is live. **This is the metric that quantifies shRing's bottleneck under imbalance**, and it is the one Phase 3 needs. It is exposed as a field shRing added to `rte_eth_stats` (`rx_contention`) and is printed only by the patched `l3fwd` (`l3fwd_lpm.c:292`) — testpmd does not know about it, so the harness must use l3fwd.
+- `idle/total` = 0.21
+
+&nbsp;
+
+### 15.4 Dead ends, recorded so they are not retried
+
+- **MPRQ + RMP does not initialize.** `mprq_en=1,rxqs_min_mprq=4` fails with `Cannot allocate memory` regardless of mbuf pool size. Cause: a double shift in `mlx5_rxq.c` — the RMP path computes `desc = (1 << rxq->elts_n)`, but `elts_n` was *already* divided by the stride count in `mlx5_rxq_new()`, and the RMP path divides it again (`desc >> mprq_stride_nums`). For any `rxd` below 4096 the result is 0, and `mlx5_malloc(0)` returns NULL, which the code reports as ENOMEM. **Do not patch this.** The shRing paper never uses MPRQ, so this path was evidently never exercised; patching the baseline to enable a mode its authors did not evaluate would mean no longer comparing against the published system.
+- `-Denable_drivers=net/mlx5` — see §14.1.
+
+&nbsp;
+
+### 15.5 Where our testbed still differs from the shRing paper
+
+From the paper's own setup section: *"we use default application settings: 1024 descriptor Rx and Tx rings and 2 DDIO LLC [ways]"*, on Ubuntu 18.04 / Linux 5.4, ConnectX-5, with TRex as load generator.
+
+| | shRing paper | our `dut` | resolved? |
+|---|---|---|---|
+| Rx ring | 1024 desc | 1024 desc | ✅ matched |
+| DDIO ways | 2 | to be measured | open (§9.1) |
+| NIC | ConnectX-5 | ConnectX-6 Dx, fw 22.46.3048 | works, but a different generation |
+| Hugepages | 1 GiB | 2 MiB | **open** |
+| Hyperthreading | disabled | enabled (32 logical / 16 physical) | **open** |
+| CPU isolation | `isolcpus` | not configured | **open** |
+| Pause frames | disabled | unverified | **open** |
+| Load generator | TRex (patched for 1 µs latency accuracy) | testpmd `txonly` | **open (P3)** |
+
+The four open rows are tuning, not correctness — none of them block development, but all of them must be closed before any number goes into the thesis.
 
 &nbsp;
