@@ -54,7 +54,13 @@ SUPPORTED_NODE_TYPES = {
 
 DEFAULT_NODE_TYPE = "sm110p"
 
-UBUNTU_22_IMAGE = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD"
+# The DPDK version is forced by shRing, which forked from the v21.05 release
+# commit (May 2021), so the OS is pinned to that era's distribution. DPDK 21.05
+# requires meson >= 0.49.2 and Ubuntu 20.04 ships 0.53.2. More importantly, its
+# binutils 2.34 still supports the `ar x` invocation that DPDK's pmdinfogen step
+# (buildtools/gen-pmdinfo-cfile.py) relies on; newer binutils breaks it, which
+# was verified to fail the mlx5 build on Ubuntu 24.04 / binutils 2.42.
+UBUNTU_20_IMAGE = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD"
 
 
 # --- Fixed experiment topology --------------------------------------------
@@ -91,10 +97,12 @@ def bind_parameters():
         "osImage",
         "Disk image",
         portal.ParameterType.IMAGE,
-        UBUNTU_22_IMAGE,
+        UBUNTU_20_IMAGE,
         longDescription=(
-            "Ubuntu 22.04 ships an in-tree rdma-core new enough for the mlx5 "
-            "poll-mode driver. Change only after confirming driver support."
+            "Ubuntu 20.04 is the release contemporary with DPDK 21.05, which "
+            "shRing forces on this project. Its rdma-core 28.0 is well above "
+            "the mlx5 poll-mode driver's v15 minimum. Do not move to a newer "
+            "image without re-verifying that DPDK 21.05 still builds."
         ),
     )
     context.defineParameter(

@@ -128,6 +128,7 @@ The key restructuring: in stock DPDK the Rx ring plays a **dual role** — it bo
 
 ### 8.1 Node type and topology (fixed by `profile.py`)
 
+- `profile.py` pins the **disk image to Ubuntu 20.04** (`UBUNTU20-64-STD`), decided 2026-09-28. This is not incidental and must not be "modernised": shRing forces DPDK 21.05, and DPDK 21.05 does not build on a modern toolchain. Verified locally on Ubuntu 24.04 — `meson setup` succeeds and the C code compiles clean under gcc 13 with **zero compiler errors**, but the build then dies in DPDK's own `buildtools/gen-pmdinfo-cfile.py`, whose `ar x` call fails under binutils 2.42. It hits `libtmp_rte_common_mlx5.a` too, so it is not avoidable by ignoring unrelated drivers. Ubuntu 20.04 ships binutils 2.34 (works), meson 0.53.2 (DPDK 21.05 needs >= 0.49.2) and rdma-core 28.0 (mlx5 needs >= v15).
 - `profile.py` pins the node type to **`sm110p`** (Xeon Silver 4314, single NUMA node, 32 logical CPUs, ConnectX-6 Dx 100Gb) on the **Wisconsin** CloudLab cluster (`*.wisc.cloudlab.us`) — this answers open question §9.1's "which profile" half. **DDIO support is expected for this Xeon Scalable generation but has not been independently measured yet** — do not treat it as confirmed until the Phase 0 measurement harness (§11) checks it via PCM/PMU counters.
 - The profile allocates exactly two roles, **`dut`** and **`tgen`**, each with a `/mydata` blockstore (100GB) and two Mellanox NICs:
   - A **ConnectX-6 Lx** — the control-plane NIC, DHCP-assigned on the shared cluster network, carries SSH. **Never point DPDK/EAL at this one.**
@@ -145,7 +146,7 @@ Answer these by reading the source and, where needed, running small probes. Do n
 &nbsp;
 
 1. **DDIO node.** ✅ Node type fixed by `profile.py`: `sm110p` (see §8.1). Still open: independently confirm DDIO is active for this generation via PCM/PMU counters, not just assumed from CPU spec (fold into the §11 measurement harness).  
-2. **Fork point.** Do we build on `shRing-dpdk` and add the allocator, or start from vanilla DPDK and port only what we need? Decide after diffing them.  
+2. **Fork point.** ✅ **RESOLVED (2026-09-28): build on `shRing-dpdk`.** Diffing it against upstream settles it. `git merge-base` lands exactly on the `v21.05` release commit (`175af2573`), so the fork is clean and its whole delta is 13 commits / 26 files / ~3.1k inserted lines. Decisively, every shRing datapath change is gated behind the `rmp_en` devarg and adds *separate* burst functions (`mlx5_rx_burst_rmp`, `mlx5_rx_burst_rmp_mprq`) rather than altering the stock ones — so **one binary yields both baselines**: `rmp_en=0` is privRing, `rmp_en=1,rqs_per_rmp=N` is shRing. Building here removes the DPDK-version confounder from the comparison entirely. The vanilla `v21.05` tree is kept only to validate that equivalence and to diff against while reading. Caveat: shRing also patches `examples/l3fwd`, so the two trees' `l3fwd` binaries are **not** identical — hence the validation is required, not assumed.  
 3. **mlx5 Rx path.** Where exactly does the mlx5 PMD refill the Rx ring from the mempool? What is the smallest hook point to insert a FILL/credit step without rewriting the datapath?  
 4. **UMEM \= mempool?** Confirm that a single shared `rte_mempool` is the right "UMEM" abstraction, and how per-core FILL rings draw from it.  
 5. **Allocator semantics.** What does a "credit" represent (chunks? bytes? descriptors?), and what is the rebalancing policy under imbalance?  
@@ -236,6 +237,19 @@ sudo setup/dev-environment.sh tgen    # on the tgen node
 
 - `linux-cpupower` is **not a real Ubuntu/Debian package** — that name is from Fedora/RHEL (`kernel-tools`). On Ubuntu, `cpupower` ships inside `linux-tools-common` + `linux-tools-$(uname -r)` + `linux-tools-generic`, which the script already installs. Adding `linux-cpupower` to the `apt-get install` list makes the whole install fail (`set -euo pipefail` aborts the script right there).
 - `dpdk-hugepages.py --setup` expects the **total memory size to reserve** (e.g. `8192M`, `8G`), **not a page count**. Passing a raw page count (e.g. `4096`) gets silently parsed as a byte count and fails with `Huge reservation 4Kb is not a multiple of page size 2Mb`. The fix: compute the size explicitly, e.g. `--setup "$((HUGEPAGE_COUNT * 2))M"` when `HUGEPAGE_COUNT` is a number of 2MB pages.
+- **Do not narrow the build with `-Denable_drivers=net/mlx5`.** On DPDK 21.05 that option does not resolve dependencies: it produced a configure with `net:` *empty* and no mempool driver either (286 targets instead of 2138), exit code 0 and no warning. The resulting build is useless and only fails at runtime. Build the full tree.
+- **Do not upgrade the disk image** past Ubuntu 20.04 without re-verifying the build — see §8.1 for the binutils failure that follows.
+
+&nbsp;
+
+Both baselines come out of the shRing tree, from the same binary (see §9.2):
+
+```bash
+# privRing (stock per-core Rx rings)
+sudo ./build/examples/dpdk-l3fwd -l <cores> -n 4 -a <pci> -- ...
+# shRing (N cores sharing one Rx ring)
+sudo ./build/examples/dpdk-l3fwd -l <cores> -n 4 -a <pci>,rmp_en=1,rqs_per_rmp=8 -- ...
+```
 
 &nbsp;
 
