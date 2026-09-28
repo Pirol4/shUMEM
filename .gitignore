@@ -1,5 +1,6 @@
 # Local project context / assistant files — not published
-CLAUDE.md
+# CLAUDE.md is deliberately tracked: it is the project's source of truth and
+# must never drift from an external copy again.
 CLAUDE.local.md
 .claude/
 
