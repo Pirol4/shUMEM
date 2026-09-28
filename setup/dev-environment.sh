@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # CloudLab node setup for the decoupled-FILL/RX DPDK experiment.
-# Target: sm110p (Xeon Silver 4314, single NUMA, ConnectX-6 DX 100Gb), Ubuntu 20.04.
-# Ubuntu 20.04 is not incidental: DPDK 21.05 (forced by shRing) does not build on
-# modern binutils. See profile.py for the full reasoning.
+# Target: sm110p (Xeon Silver 4314, single NUMA, ConnectX-6 DX 100Gb), Ubuntu 22.04.
+# DPDK 21.05 (pinned by shRing) does not build unmodified on this toolchain;
+# setup/patches/ fixes that. See CLAUDE.md section 14.1.
 #
 # Usage (run manually on each node after SSH'ing in, once per node):
 #   sudo ./setup.sh dut
@@ -25,6 +25,9 @@ if [[ "$EUID" -ne 0 ]]; then
     echo "Must run as root (sudo $0 $ROLE)" >&2
     exit 1
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATCH_DIR="$SCRIPT_DIR/patches"
 
 SCRATCH=/mydata
 REPO_DIR="$SCRATCH/dpdk-research"
@@ -123,22 +126,55 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 
-# Clones if absent, then always re-pins to $ref, so re-running the script also
-# repairs a tree someone left on the wrong commit.
+# Clones at the pinned commit on first run. On later runs it only *reports* a
+# mismatch: the shRing tree is where the implementation gets written, so moving
+# HEAD or discarding the working tree automatically could destroy real work.
 clone_at_ref() {
-    local url="$1" dir="$2" ref="$3" label="$4"
+    local url="$1" dir="$2" ref="$3" label="$4" head
     if [[ ! -d "$dir/.git" ]]; then
         log "Cloning $label into $dir"
         git clone "$url" "$dir"
+        ( cd "$dir" && git checkout --quiet --detach "$ref" )
+        log "$label pinned at $ref"
+        return
     fi
-    ( cd "$dir" && git checkout --quiet --detach "$ref" )
-    log "$label pinned at $ref"
+    head="$(cd "$dir" && git rev-parse HEAD)"
+    if [[ "$head" == "$ref" ]]; then
+        log "$label already at the pinned commit"
+    else
+        log "WARNING: $label is at $head but the pin is $ref."
+        log "         Leaving it alone — it may hold your own work. Move it by"
+        log "         hand once anything local is saved, or results from this"
+        log "         node will not be comparable with earlier measurements."
+    fi
+}
+
+# DPDK 21.05 predates the toolchain on the node, so it needs a small number of
+# build fixes. They live as patch files rather than being edited in place, so
+# that every deviation from the pinned upstream commit is auditable -- which
+# matters when the thesis claims these trees are the published baselines.
+apply_patches() {
+    local dir="$1" label="$2" patch
+    shopt -s nullglob
+    for patch in "$PATCH_DIR"/*.patch; do
+        if ( cd "$dir" && git apply --reverse --check "$patch" ) 2>/dev/null; then
+            log "$label: already patched with $(basename "$patch")"
+        else
+            ( cd "$dir" && git apply "$patch" )
+            log "$label: applied $(basename "$patch")"
+        fi
+    done
+    shopt -u nullglob
 }
 
 clone_at_ref "https://github.com/BorisPis/shRing-dpdk.git" "$SHRING_DIR" \
              "$SHRING_REF" "shRing-dpdk (primary tree)"
 clone_at_ref "https://github.com/DPDK/dpdk.git" "$VANILLA_DIR" \
              "$VANILLA_REF" "vanilla DPDK v21.05 (reference only)"
+
+# Both trees are the same DPDK base, so both need the same build fixes.
+apply_patches "$SHRING_DIR" "shRing-dpdk"
+apply_patches "$VANILLA_DIR" "vanilla DPDK"
 
 # --- 4. Hugepages (runtime only, no reboot) -----------------------------------
 

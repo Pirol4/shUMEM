@@ -54,13 +54,15 @@ SUPPORTED_NODE_TYPES = {
 
 DEFAULT_NODE_TYPE = "sm110p"
 
-# The DPDK version is forced by shRing, which forked from the v21.05 release
-# commit (May 2021), so the OS is pinned to that era's distribution. DPDK 21.05
-# requires meson >= 0.49.2 and Ubuntu 20.04 ships 0.53.2. More importantly, its
-# binutils 2.34 still supports the `ar x` invocation that DPDK's pmdinfogen step
-# (buildtools/gen-pmdinfo-cfile.py) relies on; newer binutils breaks it, which
-# was verified to fail the mlx5 build on Ubuntu 24.04 / binutils 2.42.
-UBUNTU_20_IMAGE = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD"
+# Ubuntu 20.04 was tried first, to match the era of DPDK 21.05 (which shRing
+# pins). CloudLab rejects it: UBUNTU20-64-STD "does not run on this hardware
+# type" on sm110p, and the experiment never leaves the Pending state. 22.04 is
+# the oldest image this node type takes, and it is the one already validated
+# end-to-end on it.
+#
+# The DPDK 21.05 build problem that motivated 20.04 is handled in the build
+# instead, by setup/patches/. Nothing here needs to change for it.
+UBUNTU_22_IMAGE = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD"
 
 
 # --- Fixed experiment topology --------------------------------------------
@@ -97,12 +99,12 @@ def bind_parameters():
         "osImage",
         "Disk image",
         portal.ParameterType.IMAGE,
-        UBUNTU_20_IMAGE,
+        UBUNTU_22_IMAGE,
         longDescription=(
-            "Ubuntu 20.04 is the release contemporary with DPDK 21.05, which "
-            "shRing forces on this project. Its rdma-core 28.0 is well above "
-            "the mlx5 poll-mode driver's v15 minimum. Do not move to a newer "
-            "image without re-verifying that DPDK 21.05 still builds."
+            "Ubuntu 22.04 ships an in-tree rdma-core new enough for the mlx5 "
+            "poll-mode driver, and is the oldest image sm110p accepts -- "
+            "20.04 is refused by CloudLab on this hardware type. DPDK 21.05 "
+            "needs setup/patches/ to build here; see CLAUDE.md section 14.1."
         ),
     )
     context.defineParameter(
