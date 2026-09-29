@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+#
+# Start the shRing tree's l3fwd on the dut as one of the systems under test.
+# Every system uses the same binary, cores and queue layout; only the mlx5
+# devargs and the Rx ring size change (CLAUDE.md sections 11 and 15).
+#
+# Usage (on dut, inside tmux; Ctrl-C stops it and prints the final counters):
+#   sudo harness/run_l3fwd.sh privring-1024
+#   sudo harness/run_l3fwd.sh privring-128
+#   sudo harness/run_l3fwd.sh shring-8
+#
+# The whole output, including the final per-queue counters and the shRing
+# `contention` line, is saved to $RESULTS_DIR/l3fwd_<system>_<timestamp>.log.
+
+set -euo pipefail
+
+SYSTEM="${1:-}"
+
+SHRING_DIR="${SHRING_DIR:-/mydata/dpdk-research/shring-dpdk}"
+RESULTS_DIR="${RESULTS_DIR:-/mydata/dpdk-research/results}"
+L3FWD="$SHRING_DIR/build/examples/dpdk-l3fwd"
+
+DUT_IP=10.10.1.1
+TGEN_IP=10.10.1.2
+
+# 8 Rx queues on 8 distinct physical cores (1-8), leaving core 0 to the OS.
+# Queue q is served by lcore q+1.
+CORES=1-8
+NB_QUEUES=8
+
+# Mandatory on every system, not only shRing: see CLAUDE.md section 15.1.
+COMMON_DEVARGS="rx_vec_en=0,rxq_cqe_comp_en=0"
+
+usage() {
+    echo "Usage: sudo $0 <privring-1024|privring-128|shring-8>" >&2
+    exit 1
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Sets DEVARGS and NB_RXD for the requested system.
+select_system() {
+    case "$1" in
+        privring-1024) DEVARGS="rmp_en=0,$COMMON_DEVARGS";                   NB_RXD=1024 ;;
+        # Same I/O working set as shring-8 (8 x 128 = 1 x 1024 buffers) while
+        # sharing nothing: separates "sharing" from "smaller ring".
+        privring-128)  DEVARGS="rmp_en=0,$COMMON_DEVARGS";                   NB_RXD=128 ;;
+        # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
+        shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;
+        *) usage ;;
+    esac
+}
+
+interface_with_ip() {
+    { ip -o -4 addr show | awk -v ip="$1" '$4 ~ "^"ip"/" {print $2}' | head -1; } || true
+}
+
+learn_neighbor_mac() {
+    local iface="$1" ip="$2"
+    ping -c 2 -W 1 -I "$iface" "$ip" >/dev/null 2>&1 || true
+    { ip neigh show "$ip" dev "$iface" | awk '/lladdr/ {print $3}' | head -1; } || true
+}
+
+queue_config() {
+    local q config=""
+    for ((q = 0; q < NB_QUEUES; q++)); do
+        config+="(0,$q,$((q + 1))),"
+    done
+    echo "${config%,}"
+}
+
+[[ "$EUID" -eq 0 ]] || die "must run as root (sudo $0 $SYSTEM)"
+[[ -n "$SYSTEM" ]] || usage
+select_system "$SYSTEM"
+[[ -x "$L3FWD" ]] || die "$L3FWD not found; run setup/dev-environment.sh dut first"
+
+IFACE="$(interface_with_ip "$DUT_IP")"
+[[ -n "$IFACE" ]] || die "no interface holds $DUT_IP — is this the dut node?"
+PCI="$(basename "$(readlink -f "/sys/class/net/$IFACE/device")")"
+
+# l3fwd rewrites the destination MAC of every forwarded packet to this one.
+# A stale MAC (they change on every re-instantiation) shows up as 100% loss.
+TGEN_MAC="${TGEN_MAC:-$(learn_neighbor_mac "$IFACE" "$TGEN_IP")}"
+[[ -n "$TGEN_MAC" ]] || die "could not learn the tgen MAC via $TGEN_IP; set TGEN_MAC=<mac>"
+
+mkdir -p "$RESULTS_DIR"
+LOG="$RESULTS_DIR/l3fwd_${SYSTEM}_$(date +%Y%m%d-%H%M%S).log"
+
+echo "system=$SYSTEM pci=$PCI devargs=$DEVARGS nb_rxd=$NB_RXD tgen_mac=$TGEN_MAC"
+echo "log: $LOG"
+
+# tee -i: Ctrl-C reaches the whole pipeline. Plain tee dies on it at once,
+# while l3fwd only prints its final counters after handling the signal, so
+# without -i the log loses exactly the lines that matter.
+"$L3FWD" -l "$CORES" -n 4 -a "$PCI,$DEVARGS" -- \
+    -p 0x1 \
+    --config="$(queue_config)" \
+    --eth-dest="0,$TGEN_MAC" \
+    --nb-rxd="$NB_RXD" \
+    2>&1 | tee -i "$LOG"
