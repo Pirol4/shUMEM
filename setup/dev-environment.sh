@@ -236,7 +236,7 @@ if [[ "$ROLE" == "dut" ]]; then
     log "PCM needs MSR access: this script installed msr-tools and loaded msr below."
     modprobe msr || log "WARNING: could not load msr module — PCM may need it at runtime."
 else
-    log "Role tgen: skipping PCM. Traffic will be generated with dpdk-testpmd (built above)."
+    log "Role tgen: skipping PCM. Traffic comes from TRex: run setup/trex-setup.sh next."
 fi
 
 # --- 6b. Claude Code CLI (dut only — this is where the DPDK code gets written) -
@@ -310,6 +310,10 @@ fi
 
 log "Done. Next: confirm the experiment-NIC interface name above, then continue with"
 log "CLAUDE.md Phase 0. Both baselines come from the shRing tree, same binary:"
-log "  privRing :  -a <pci>"
-log "  shRing   :  -a <pci>,rmp_en=1,rqs_per_rmp=8"
+log "  privRing :  -a <pci>,rmp_en=0,rx_vec_en=0,rxq_cqe_comp_en=0"
+log "  shRing   :  -a <pci>,rmp_en=1,rqs_per_rmp=8,rx_vec_en=0,rxq_cqe_comp_en=0"
+log "harness/run_l3fwd.sh builds these commands for you (CLAUDE.md section 17)."
 log "Before trusting either, verify that rmp_en=0 matches the vanilla v21.05 tree."
+if [[ "$ROLE" == "tgen" ]]; then
+    log "On tgen, continue with: sudo $SCRIPT_DIR/trex-setup.sh"
+fi
