@@ -166,7 +166,9 @@ Each phase has an explicit **Done when** so we know it is complete.
   &nbsp;  
   **Status (2026-09-28).** Both baselines run. The shRing tree builds (§14.1), and `l3fwd` forwards 1500 B traffic at line rate with zero loss under **both** privRing and shRing, from the same binary — the configuration and its two mandatory devargs are in §15. Intel PCM reads the uncore counters on `sm110p` (16 CHA/CBO, 6 IIO/IRP, 8 memory channels), so `pcm`, `pcm-memory` and `pcm-pcie` all return real data. rxBisect is out as a measured baseline (§11).
   &nbsp;
-  **Remaining for this phase:** (1) a traffic generator that can do RFC2544 no-drop, tail latency and controlled imbalance — testpmd does none of these, so TRex is needed; (2) measure `|DDIO|` on this node, which closes §9.1 and supplies the constant in §15.5; (3) the measurement harness itself — a script taking (system, cores, ring size, load regime) and emitting one comparable row; (4) close the tuning gaps in §15.5 (1 GiB hugepages, hyperthreading off, `isolcpus`, pause frames).  
+  **Status (2026-09-29).** TRex v3.07 runs on `tgen` (§16) and the harness (§17) drives the first like-for-like comparison: privRing-1024, small privRing-128 and shRing-8, same binary, same 8 cores, same window, same offered load. Balanced 1500 B load, 10–100% of line rate, two repetitions: **all three tie** — zero loss everywhere, latency within run-to-run noise. Pause frames are now off on both nodes (§15.5).
+  &nbsp;
+  **Remaining for this phase:** (1) silence the dut kernel's multicast on the experiment link — it adds ~30–60 packets per 30 s window to TRex's receive count and masks small losses (§17.3); (2) an RFC2544 no-drop search and the imbalanced load regime in the harness — the balanced run cannot separate the systems; (3) measure `|DDIO|` on this node, which closes §9.1 and supplies the constant in §15.5; (4) close the remaining tuning gaps in §15.5 (1 GiB hugepages, hyperthreading off, `isolcpus`).  
   &nbsp;  
 - **Phase 1 — Single FILL/RX pair, static UMEM slice.** One core, one FILL/RX pair drawing empties from a shared UMEM (a fixed slice). Prove the decoupled mechanism works and forwards packets. *Done when:* one core forwards traffic via the decoupled FILL/RX path with no loss at a modest rate, matching vanilla correctness.  
   &nbsp;  
@@ -252,7 +254,10 @@ SSH into each node and run, once per node (idempotent — safe to re-run; heavy 
 ```bash
 sudo setup/dev-environment.sh dut     # on the dut node
 sudo setup/dev-environment.sh tgen    # on the tgen node
+sudo setup/trex-setup.sh              # then, on tgen only (section 16)
 ```
+
+`setup/node-setup.sh` runs on every boot (the profile's `pg.Execute`) and, besides hugepages, turns **pause frames off** on the experiment NIC of both nodes — `ethtool -A` does not survive a reboot, so it cannot live in the one-off setup script.
 
 **Bugs already fixed in this script (kept here as history, in case a similar script is written later):**
 
@@ -361,6 +366,15 @@ ip route show dev "$IFACE"
 | `dut` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:04:82` |
 | `tgen` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:04:7e` |
 
+**Instantiation live as of 2026-09-29** (the one §16 and §17 were measured on). Interface and PCI held once more; the MACs changed again:
+
+| | interface | PCI | MAC |
+|---|---|---|---|
+| `dut` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:08:ae` |
+| `tgen` | `ens2f0np0` | `0000:51:00.0` | `b8:3f:d2:13:0a:7a` |
+
+Both TRex's `dest_mac` and l3fwd's `--eth-dest` depend on these, and a stale one shows up as 100% loss with no error. `setup/trex-setup.sh` and `harness/run_l3fwd.sh` therefore learn the peer MAC over the link (ping + `ip neigh`) instead of reading it from here.
+
 Re-derive with §14.2 after any re-instantiation; these are recorded only to save a step while this instantiation is up.
 - Result: `tgen` `txonly` sent ~1.16B 64B packets (single core, software-bound — the resulting `TX-dropped` count is expected and not a hardware fault); `dut` `rxonly` received ~1.0B packets. Confirms the DPDK build, the mlx5 PMD, and the isolated cross-node link all work correctly.
 
@@ -438,10 +452,12 @@ From the paper's own setup section: *"we use default application settings: 1024 
 | Hugepages | 1 GiB | 2 MiB | **open** |
 | Hyperthreading | disabled | enabled (32 logical / 16 physical) | **open** |
 | CPU isolation | `isolcpus` | not configured | **open** |
-| Pause frames | disabled | unverified | **open** |
-| Load generator | TRex (patched for 1 µs latency accuracy) | testpmd `txonly` | **open (P3)** |
+| Pause frames | disabled | disabled (since 2026-09-29, `node-setup.sh`) | ✅ closed |
+| Load generator | TRex (patched for 1 µs latency accuracy) | stock TRex v3.07 (§16) | ✅ for loss/throughput; latency accuracy open |
 
-The four open rows are tuning, not correctness — none of them block development, but all of them must be closed before any number goes into the thesis.
+The three open rows are tuning, not correctness — none of them block development, but all of them must be closed before any number goes into the thesis.
+
+**Pause frames were ON before 2026-09-29, on both nodes** (`ethtool -a`: `RX: on`, `TX: on`, the image default). Everything in §15.2–15.3 was therefore measured with 802.3x flow control active: an overloaded dut could pause the sender instead of dropping. The works-versus-starves conclusions stand, but a "0% loss" from that period is not a no-drop result — re-measure before citing any of them.
 
 &nbsp;
 
@@ -461,26 +477,129 @@ Latent problems in the code we run as a baseline. Recorded because they may surf
 
 ---
 
-## 16\. Traffic generator (Phase 0, item P3 — not installed yet)
+## 16\. Traffic generator — TRex v3.07 on `tgen` (installed and validated 2026-09-29)
 
 testpmd cannot do what §11 requires: no RFC2544 no-drop search, no tail latency, and `--txonly-multi-flow` gives no control over flow skew, which is precisely the imbalance regime where this project's contribution is supposed to win. The shRing paper uses **Cisco TRex**, so does the rxBisect paper, and it covers all three needs.
 
-Researched 2026-09-28, not yet executed:
+`setup/trex-setup.sh` does everything below on a fresh `tgen`; this section explains why each step is there.
 
-- **Version: v3.07.** TRex documents Mellanox compatibility per release, and v3.07 is the one listed against Ubuntu 22.04. Pin it rather than `latest`, for the same reason the DPDK trees are pinned.
-- **Do not install MLNX_OFED.** The compatibility table names OFED 25.07, but the same document offers *"RDMA Core library with a recent enough Linux kernel release (recommended)"* as the alternative. Ubuntu 22.04 ships rdma-core 39 against a minimum of 16, and §15 proves mlx5 already works on this node with it. Installing MLNX_OFED would replace the system rdma-core and put a working setup at risk.
+&nbsp;
+
+### 16.1 Decisions that still hold from the 2026-09-28 research
+
+- **Version: v3.07.** TRex documents Mellanox compatibility per release, and v3.07 is the one listed against Ubuntu 22.04. Pinned rather than `latest`, for the same reason the DPDK trees are pinned. Installed at `/mydata/trex/v3.07`.
+- **Do not install MLNX_OFED.** It would replace the system rdma-core wholesale. The narrower fix in §16.2 is enough.
 - **The download needs `--no-check-certificate`.** `trex-tgn.cisco.com` serves an incomplete chain — the leaf is a valid Cisco certificate (`CN = trex-tgn.cisco.com, O = Cisco Systems Inc.`) but the intermediate to `IdenTrust Commercial Root CA 1` is missing, so verification fails with code 21. This is a server misconfiguration and it is why TRex's own instructions disable verification; the cost is that the download cannot be cryptographically traced to Cisco. Building from the GitHub source is the alternative if that matters.
-- **The Mellanox port stays on the kernel `mlx5_core` driver**, exactly as with DPDK here — there is no `dpdk-devbind` step. TRex takes PCI addresses directly in `interfaces:` in `/etc/trex_cfg.yaml`, discovered with `sudo ./dpdk_setup_ports.py -t`.
+- **The Mellanox port stays on the kernel `mlx5_core` driver**, exactly as with DPDK here — there is no `dpdk-devbind` step. TRex takes PCI addresses directly in `interfaces:`; `sudo ./dpdk_setup_ports.py -t` lists them (read-only, no OFED check).
 - **Latency accuracy.** The shRing paper notes it modified TRex to improve latency measurement from 10–100 µs to 1 µs. Stock TRex is fine for throughput and loss; that modification becomes relevant only if the thesis claims tail latency.
 
-First steps, on `tgen`, with no testpmd running:
+&nbsp;
 
-```bash
-cd /mydata && sudo wget --no-check-certificate https://trex-tgn.cisco.com/trex/release/v3.07.tar.gz
-cd /mydata && sudo tar -xzf v3.07.tar.gz
-cd /mydata/v3.07 && sudo ./dpdk_setup_ports.py -t
+### 16.2 TRex needs rdma-core v44 — the 2026-09-28 assumption was wrong
+
+The earlier plan said Ubuntu 22.04's rdma-core 39 was enough. **It is not.** TRex builds its own DPDK, but its mlx5 driver loads the *system* `libmlx5`/`libibverbs` at run time, and the loader checks versioned symbols, not just names:
+
+| | highest `MLX5_1.x` |
+|---|---|
+| required by TRex v3.07 (`so/x86_64/libmlx5-64.so`) | `MLX5_1.24` |
+| exported by rdma-core 39 (Ubuntu 22.04) | `MLX5_1.22` |
+| exported by rdma-core 44 | `MLX5_1.24` (first release that has it) |
+
+Check on the node with `objdump -T <lib> | grep -o 'MLX5_1\.[0-9]*' | sort -uV | tail -1`.
+
+- **Fix: build rdma-core `v44.0` into `/usr/local`, on `tgen` only.** It wins over the apt copy because `/etc/ld.so.conf.d/libc.conf` (listing `/usr/local/lib`) sorts before `x86_64-linux-gnu.conf`; the apt package stays installed and untouched. Providers go along: the new `libibverbs` looks for them in `/usr/local/lib/libibverbs/`, so it never mixes with v39's.
+- **A private prefix does not work:** `t-rex-64` does `export LD_LIBRARY_PATH=$PWD`, overwriting whatever you pass.
+- **Never on the `dut`.** Its rdma-core 39 + DPDK 21.05 stack is the one §15 validated; changing a datapath library there would void that.
+- Build flags: `cmake -GNinja -DNO_MAN_PAGES=1 -DNO_PYVERBS=1 ..` (no pandoc, no Cython). Verified: `ldconfig -p` lists `/usr/local/lib/libmlx5.so.1` first, it exports `MLX5_1.24`, and `/usr/local/bin/ibv_devinfo -l` lists the four `mlx5_*` devices.
+
+&nbsp;
+
+### 16.3 `/etc/trex_cfg.yaml`
+
+```yaml
+- version: 2
+  port_limit: 2
+  port_mtu: 1500
+  interfaces: ['51:00.0', 'dummy']
+  port_info:
+    - src_mac:  <tgen experiment MAC>
+      dest_mac: <dut experiment MAC>
+    - src_mac:  00:00:00:00:00:00
+      dest_mac: 00:00:00:00:00:00
+  platform:
+    master_thread_id: 0
+    latency_thread_id: 1
+    dual_if:
+      - socket: 0
+        threads: [2, 3, 4, 5, 6, 7]
 ```
 
-The output of that last command supplies the values for `/etc/trex_cfg.yaml`; do not write the config from guesses.
+- **`port_mtu: 1500` is mandatory.** Without it TRex asks for the largest MTU the PMD reports (`main_dpdk.cpp:4340`): mlx5 reports a generic 64 KiB `max_rx_pktlen`, TRex requests MTU 65518, the ConnectX-6 Dx refuses (max ~9.9 KB), and startup dies with `mlx5_net: port 0 failed to set MTU to 65518` / `dev_configure = -22`. 1500 covers our 1500 B frames; raise to 9000 only if jumbo frames are ever tested.
+- **`'dummy'` second port.** TRex wants ports in pairs; the testbed has one cable. TRex's docs list *single interface, stateless* as functional. All traffic goes out port 0.
+- **MACs, not IP/gateway.** l3fwd is pure DPDK and never answers ARP, so TRex has to address the dut's MAC directly (L2 mode).
+- **Cores.** Master 0, latency 1, six workers 2–7, all distinct physical cores (HT siblings are `N,N+16` on `sm110p`). 100 Gb/s at 1500 B is only ~8.2 Mpps, so this is ample.
+
+&nbsp;
+
+### 16.4 Running it
+
+```bash
+cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check    # inside tmux
+```
+
+- **`-i`**: interactive server, required for stateless profiles and the Python API.
+- **`--no-ofed-check`** replaces the old `ofed_info` stub trick. Side effect, from `dpdk_setup_ports.py`: with it TRex **no longer disables pause frames** on mlx5 — `node-setup.sh` does that instead (§14.1).
+- No testpmd may be running on `tgen`; it would hold the port.
+
+Smoke test, validated 2026-09-29 (`./trex-console`, then `start -f <profile> -m 10% -d 10 --port 0`, then `stats -p`): `opackets` = 8,202,100, exactly 10% of line rate for 10 s (a 1500 B frame is 1524 B on the wire, so line rate is 8.202 Mpps), `obytes/opackets` = 1504 (frame + FCS), `oerrors` = 0.
+
+&nbsp;
+
+---
+
+## 17\. Measurement harness and first comparison (2026-09-29)
+
+&nbsp;
+
+### 17.1 Pieces
+
+| File | Node | Role |
+|---|---|---|
+| `harness/run_l3fwd.sh <system>` | dut | Starts l3fwd as `privring-1024`, `privring-128` or `shring-8`: same binary, cores 1–8, 8 queues (queue *q* on lcore *q+1*), §15 devargs, peer MAC learned over the link. Logs to `/mydata/dpdk-research/results/`. |
+| `harness/trex/udp_multiflow.py` | tgen | TRex profile: UDP 1500 B to `198.18.0.1` (l3fwd's built-in route back out port 0), source IP walking 4096 values so `ETH_RSS_IP` spreads it over all queues, plus a 1000 pps latency stream. |
+| `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. |
+
+Protocol per system: start `run_l3fwd.sh` on dut → run `rate_sweep.py --label <system> --out <csv>` on tgen → Ctrl-C l3fwd, whose log now holds the final counters.
+
+**Always log l3fwd through `tee -i`** (the script does). Ctrl-C reaches the whole pipeline; a plain `tee` dies at once, while l3fwd prints its final counters only *after* handling the signal — the first run of this harness lost exactly those lines.
+
+&nbsp;
+
+### 17.2 Result: balanced load, 1500 B, 8 cores
+
+Two repetitions per system, 30 s per rate. **Loss: zero for all three systems at every rate in both runs**, with `rx_missed_errors` = `rx_out_of_buffer` = 0 on the dut. Mean latency (µs, run 1 / run 2):
+
+| offered load | privRing-1024 | privRing-128 | shRing-8 |
+|---|---|---|---|
+| 10% | 57 / 60 | 57 / 65 | 69 / 58 |
+| 25% | 48 / 48 | 63 / 52 | 50 / 44 |
+| 50% | 41 / 37 | 39 / 39 | 38 / 36 |
+| 75% | 32 / 32 | 32 / 30 | 33 / 33 |
+| 90% | 32 / 34 | 32 / 33 | 32 / 33 |
+| 100% | 39 / 43 | 39 / 40 | 40 / 40 |
+
+- **The three systems are indistinguishable here.** Run-to-run variation of one system (up to 11 µs) exceeds the differences between systems. With 8 cores, 1500 B and balanced load the ring is not the bottleneck — which is what §11 predicts; separation needs imbalance, smaller packets or fewer cores.
+- **shRing really ran shared:** `contention` = 440,085 over ~861 M packets (≈1 per 2,000), versus 0 for both privRings; the log shows `Creating RMP`. §15.3 had ≈1 per 6,600 at 4 cores, but under a different load, so the growth with core count is only a hint.
+- **Counters reconcile exactly:** for privRing-1024 run 2 the 8 queues sum to 861,220,482, the exact number TRex sent across the six rates; queues differ by ~0.4% (identical split in every system, as RSS is deterministic).
+
+&nbsp;
+
+### 17.3 Measurement caveats found on the way
+
+- **The latency stream always runs at 1000 pps.** `-m X%` does not scale it; TRex takes it out of the data stream to keep the total. Its fixed source IP lands every latency packet on queue 0, which is why queue 0 carries +1000 pps.
+- **Kernel multicast pollutes TRex's rx count.** The dut's kernel still owns the netdev (bifurcated mlx5) and emits ~1–2 multicast packets/s on the link (source not yet identified — likely LLDP or IPv6 ND/MLD); the dut NIC counts them (`rx_multicast_packets`) and TRex counts them as received. Result: "negative loss" of 31–59 packets per 30 s window, varying between runs, so it cannot be subtracted as a constant. It sets the loss resolution to ~10⁻⁵ % and **must be silenced at the source before any no-drop search** — it could hide a real loss of a few dozen packets.
+- **At low load, latency measures l3fwd's TX drain timer, not the ring.** l3fwd holds output until a burst of 32 (`MAX_PKT_BURST`) or a 100 µs timer (`BURST_TX_DRAIN_US`, `l3fwd.h:25-26`). At 10% load each of 8 queues sees ~100 kpps, i.e. ~310 µs to fill a burst, so the timer drains it — hence ~57 µs mean and ~150 µs max, falling to ~32 µs at 75–90%. The timer is identical for all systems, so comparisons stay fair, but ring-induced latency differences can only show at 75–100%.
+- **Do not use l3fwd's `idle/total` as CPU utilisation.** It read 0.33 at 10% load (and 0.21 at 100% in §15.3), and idle + rx + tx + lookup cycles add up to only ~⅓ of `total_cyc`. How shRing's instrumentation accumulates these is unread; use loss, per-queue packets and `contention` until it is.
+- **l3fwd prints the port counters once per lcore** (8 identical copies); only the cycle lines differ per core.
 
 &nbsp;
