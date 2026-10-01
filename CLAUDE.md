@@ -572,6 +572,7 @@ Smoke test, validated 2026-09-29 (`./trex-console`, then `start -f <profile> -m 
 | `harness/trex/udp_multiflow.py` | tgen | TRex profile: UDP 1500 B to `198.18.0.1` (l3fwd's built-in route back out port 0), source IP walking 4096 values so `ETH_RSS_IP` spreads it over all queues, plus a 1000 pps latency stream. `hot_share` (`rate_sweep.py --hot-share`) splits that fraction off as a single flow, i.e. one hot queue — the same queue as the latency stream. |
 | `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. Since 2026-10-01 rx and loss come from `rx_unicast_packets`; the switch's multicast/broadcast goes to `rx_noise_pkts` (§17.3). |
 | `harness/pcm_memory.sh <label>` | dut | Records `pcm-memory` (1 s samples, system totals, pinned to core 0) to `/mydata/exp/pcm-mem_<label>.csv`. Easiest through `run_l3fwd.sh` with `PCM_LABEL=<label>`, which records for l3fwd's whole life and stops with it. |
+| `harness/stall_core.py --core C --stall-us S --period-ms P` | dut | Stalls one lcore (root, `SCHED_FIFO`) for S µs every P ms and reports the stalls it made (§17.9). |
 | `harness/pcm_summary.sh [labels]` | dut | Mean DRAM read/write over the loaded seconds (write > 20 MB/s) of each CSV. |
 
 Protocol per system: start `run_l3fwd.sh` on dut → run `rate_sweep.py --label <system> --out <csv>` on tgen → Ctrl-C l3fwd, whose log now holds the final counters.
@@ -718,6 +719,24 @@ Label hygiene for whoever reads `/mydata/exp`: the privRing-128 run is `hot50_pr
 - **shRing's `contention` falls as the skew rises** (≈128 k per 30 s balanced → 6.8 k at 0.75). Reading the code explains it: `contention` counts only failed CAS on the shared ring's head (`mlx5_rx.c:1134-1141`), i.e. two cores trying to advance it at the same moment. Fewer active cores, fewer races.
 - **The head advances only in sequence** (`mlx5_rx.c:1119-1146`): it moves by a 64-entry block once *every* entry of that block has been consumed, whoever's queue it landed on, and only then does the doorbell hand those buffers back to the NIC. A core that falls behind therefore holds back buffer return for **all** queues — head-of-line blocking. That, not CAS contention, is the mechanism by which shRing should degrade, and a hot queue served by a core that keeps up never triggers it. **Hypothesis to test:** stall one core (not overload the link) and shRing should lose on every queue while privRing loses only on the stalled one. The unexplained 198-packet loss in balanced shRing r3 (§17.6) fits it if an OS hiccup paused one lcore — `isolcpus` is still off (§15.5).
 - **Implication for this project's framing (§3):** "shRing bottlenecks under imbalanced load" needs to say *which* imbalance. Skewed packet rates with cores that keep up do not hurt it here; a slow or stalled consumer should. Check this against the rxBisect paper's own description before writing it into the thesis.
+
+&nbsp;
+
+### 17.9 Stalling one core: shRing's head-of-line blocking confirmed (2026-10-01)
+
+Balanced load, 100% line rate, 30 s. A CPU hog shares lcore 4 (queue 3): `sudo nice -n 19 taskset -c 4 sh -c 'while :; do :; done'`. Unstalled, each queue gets ~30.75 M packets in 30 s (RSS split is deterministic: q0 30,784,156, q4 30,814,221, the rest 30,754,155/156 in every run).
+
+| system | loss (= `rx_missed_errors`) | q3 received | other queues | shRing `contention` |
+|---|---|---|---|---|
+| privRing-1024 | 26.4 M (10.7%) | **4.26 M** (−86%) | untouched | – |
+| privRing-128 | 2.93 M (1.19%) | **27.76 M** (−9.7%) | untouched (q6 −18) | – |
+| shRing-8 | **23.5 M (9.57%)** | 27.76 M (−9.7%) | **every queue 27.81–27.87 M (−9.5%)** | 118,916 |
+
+- **The hypothesis of §17.8 holds.** Under privRing a stalled core loses only its own queue's packets; the other seven receive their exact unstalled counts. Under shRing the loss spreads evenly over **all eight queues**, each losing the fraction the stalled queue lost alone (~9.5% vs privRing-128's 9.7% on q3). One slow consumer blocks the in-sequence head, the doorbell stops returning buffers, and the whole NIC queue set starves — **8× the loss of privRing-128 for the same stall**. This is the shRing bottleneck this project targets, and per-core FILL rings over a shared UMEM have no shared in-sequence head to block.
+- **privRing-1024 losing 86% of q3 is not understood.** A nice-19 hog should get ~1.5% of the core, far too little to explain it, and a bigger ring should absorb more, not less. Most likely the stall was not the same across runs: a `nice` hog's slices depend on the scheduler, and nothing measured them. Do not use this row.
+- **Hence `harness/stall_core.py`:** a controlled stall injector — pinned to one core at `SCHED_FIFO` priority, it busy-waits `--stall-us` every `--period-ms` and reports the stalls it actually made, so expected loss can be computed and checked. Predictions for 1 ms every 100 ms on lcore 4 (300 stalls in 30 s; one queue receives ~1,025 packets/ms, all queues ~8.2 per µs):
+  - privRing-N loses ≈ max(0, 1,025 − N) per stall: privRing-1024 ≈ 0, privRing-128 ≈ 0.27 M, privRing-64 ≈ 0.29 M;
+  - shRing-8's 1,024 shared buffers last ~125 µs once the head blocks: ≈ (1,000 − 125) × 8.2 ≈ 7.2 k per stall ≈ **2.2 M**.
 
 &nbsp;
 
