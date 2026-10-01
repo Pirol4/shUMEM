@@ -10,9 +10,15 @@ A second, low-rate stream carries TRex latency signatures. The data stream
 deliberately has no per-stream flow stats: on mlx5 those need hardware flow
 rules, and the port counters already give loss.
 
-Tunables (console: -t pkt_size=1500,flows=4096):
+Imbalance (hot_share > 0): that fraction of the data rate is split off into a
+"hot" stream from a single source IP, which RSS sends to a single queue; the
+rest stays spread over all queues. The hot IP is the latency stream's own, so
+both land on the same queue and the latency stream measures the hot queue.
+
+Tunables (console: -t pkt_size=1500,flows=4096,hot_share=0.3):
   pkt_size   Frame size in bytes, excluding the 4-byte FCS (default 1500)
   flows      Number of distinct source IPs (default 4096)
+  hot_share  Fraction of the data rate sent as one flow, 0 to 1 (default 0)
 """
 from trex_stl_lib.api import *
 
@@ -42,23 +48,36 @@ def source_ip_sweep(flows):
 
 class UdpMultiFlow(object):
 
-    def get_streams(self, direction=0, pkt_size=1500, flows=4096, **kwargs):
+    def get_streams(self, direction=0, pkt_size=1500, flows=4096, hot_share=0.0, **kwargs):
         pkt_size = int(pkt_size)
         flows = int(flows)
+        hot_share = float(hot_share)
+        if not 0.0 <= hot_share <= 1.0:
+            raise ValueError("hot_share must be between 0 and 1, got %g" % hot_share)
         base = build_base_packet(pkt_size)
 
-        data = STLStream(
-            name="data",
-            packet=STLPktBuilder(pkt=base, vm=source_ip_sweep(flows)),
-            mode=STLTXCont(percentage=100),
-        )
+        # Percentages only set the ratio between streams: the -m multiplier
+        # scales the whole profile to the requested share of line rate.
+        streams = []
+        if hot_share < 1.0:
+            streams.append(STLStream(
+                name="data",
+                packet=STLPktBuilder(pkt=base, vm=source_ip_sweep(flows)),
+                mode=STLTXCont(percentage=100 * (1.0 - hot_share)),
+            ))
+        if hot_share > 0.0:
+            streams.append(STLStream(
+                name="hot",
+                packet=STLPktBuilder(pkt=base),
+                mode=STLTXCont(percentage=100 * hot_share),
+            ))
         latency = STLStream(
             name="latency",
             packet=STLPktBuilder(pkt=base),
             mode=STLTXCont(pps=LATENCY_PPS),
             flow_stats=STLFlowLatencyStats(pg_id=LATENCY_PG_ID),
         )
-        return [data, latency]
+        return streams + [latency]
 
 
 def register():

@@ -569,7 +569,7 @@ Smoke test, validated 2026-09-29 (`./trex-console`, then `start -f <profile> -m 
 | File | Node | Role |
 |---|---|---|
 | `harness/run_l3fwd.sh <system>` | dut | Starts l3fwd as `privring-<N>` (any power of two 64–8192) or `shring-8`: same binary, cores 1–8, 8 queues (queue *q* on lcore *q+1*), §15 devargs, peer MAC learned over the link. Logs to `/mydata/dpdk-research/results/`. |
-| `harness/trex/udp_multiflow.py` | tgen | TRex profile: UDP 1500 B to `198.18.0.1` (l3fwd's built-in route back out port 0), source IP walking 4096 values so `ETH_RSS_IP` spreads it over all queues, plus a 1000 pps latency stream. |
+| `harness/trex/udp_multiflow.py` | tgen | TRex profile: UDP 1500 B to `198.18.0.1` (l3fwd's built-in route back out port 0), source IP walking 4096 values so `ETH_RSS_IP` spreads it over all queues, plus a 1000 pps latency stream. `hot_share` (`rate_sweep.py --hot-share`) splits that fraction off as a single flow, i.e. one hot queue — the same queue as the latency stream. |
 | `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. Since 2026-10-01 rx and loss come from `rx_unicast_packets`; the switch's multicast/broadcast goes to `rx_noise_pkts` (§17.3). |
 | `harness/pcm_memory.sh <label>` | dut | Records `pcm-memory` (1 s samples, system totals, pinned to core 0) to `/mydata/exp/pcm-mem_<label>.csv`. Easiest through `run_l3fwd.sh` with `PCM_LABEL=<label>`, which records for l3fwd's whole life and stops with it. |
 | `harness/pcm_summary.sh [labels]` | dut | Mean DRAM read/write over the loaded seconds (write > 20 MB/s) of each CSV. |
@@ -653,3 +653,28 @@ privRing at every power of two from 64 to 4096 descriptors, same protocol as §1
 - **Caveat:** one run per point. Repeat the knee region (128–1024) before using the curve in the thesis.
 
 &nbsp;
+
+### 17.6 Repetitions of the knee region (2026-10-01)
+
+Two more runs (r2, r3) of each point, PCM now started by `run_l3fwd.sh` and pinned to core 0 (r1 was unpinned). DRAM write in MB/s, then mean and range:
+
+| system | r1 | r2 | r3 | mean | range | loss r1 / r2 / r3 |
+|---|---|---|---|---|---|---|
+| privRing-64 | 577 | 111 | 270 | 319 | 111–577 | 1,812 / 1,911 / 1,760 |
+| privRing-128 | 962 | 731 | 600 | 764 | 600–962 | 0 / 0 / 0 |
+| privRing-256 | 2,763 | 3,062 | 2,633 | 2,819 | 2,633–3,062 | 0 / 0 / 0 |
+| privRing-512 | 7,001 | 7,573 | 7,004 | 7,193 | 7,001–7,573 | 0 / 0 / 0 |
+| privRing-1024 | 10,405 | 10,319 | 10,240 | 10,321 | 10,240–10,405 | 0 / 0 / 0 |
+| shRing-8 | 227 | 201 | 122 | 183 | 122–227 | 0 / 0 / **198** |
+
+(shRing-8's r2/r3 PCM files are named `privring-8_r2/_r3` — a typo in `PCM_LABEL`; `run_l3fwd.sh` rejects `privring-8`, so those runs were shRing.)
+
+- **The knee is reproducible.** From 256 up, run-to-run spread is ≤ 10% of the mean and the ranges never overlap; 256 → 512 remains the steepest step.
+- **Below the knee the absolute numbers are small and noisy** (privRing-64 spans 5×), and r1 is the highest in both 64 and 128 — possibly the unpinned PCM of r1, possibly order; unresolved. Treat values under ~1 GB/s as "almost nothing leaks", not as precise.
+- **Revised from §17.4/17.5:** shRing-8 writes clearly less than privRing-128 (ranges 122–227 vs 600–962, no overlap), but it is **indistinguishable from privRing-64** (111–577). The claim "shRing writes less than even privRing-64" does not survive repetition.
+- **privRing-64's loss is systematic:** 1,760–1,911 per minute in every run, all `rx_missed_errors` (ring starvation).
+- **shRing-8 lost 198 packets in r3, under balanced load**, again all `rx_missed_errors` (`nombuf` 0), with `contention` = 254,779 (≈ 1 per 1,930 packets, the same rate as §17.2's 1 per 2,000). The shared ring ran out of posted buffers once in three runs. Whether that run had more contention than r1/r2 is still to be compared.
+- **Latency does not separate the systems at this load:** 38–44 µs mean in almost every run, with isolated ~70 µs runs (privRing-128 r1, privRing-256 r2) that follow no system.
+
+&nbsp;
+

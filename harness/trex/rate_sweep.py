@@ -48,12 +48,16 @@ def parse_args():
     parser.add_argument("--duration", type=float, default=30.0, help="seconds per rate")
     parser.add_argument("--pkt-size", type=int, default=1500)
     parser.add_argument("--flows", type=int, default=4096)
+    parser.add_argument("--hot-share", type=float, default=0.0,
+                        help="fraction of the data rate sent as one flow to one queue "
+                             "(imbalance); put it in --label too")
     parser.add_argument("--out", default="results.csv", help="CSV file, appended to")
     return parser.parse_args()
 
 
 def load_streams(args):
-    profile = STLProfile.load_py(args.profile, pkt_size=args.pkt_size, flows=args.flows)
+    profile = STLProfile.load_py(args.profile, pkt_size=args.pkt_size, flows=args.flows,
+                                 hot_share=args.hot_share)
     return profile.get_streams()
 
 
