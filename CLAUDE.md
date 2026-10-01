@@ -628,3 +628,27 @@ First run with `pcm-memory` beside the traffic, on a new instantiation (pause fr
 - privRing-1024's write fell steadily over the minute (11.2 → 10.0 GB/s). Not understood; watch whether it recurs.
 - **Caveat:** one run per system. The shRing-8 CSV also holds a few seconds of an aborted run under identical settings.
 
+
+### 17.5 Ring-size sweep: the DDIO knee (2026-10-01)
+
+privRing at every power of two from 64 to 4096 descriptors, same protocol as §17.4 (100% line rate, 60 s, one run each). "Written lines" is 8 queues × N buffers × 1536 B, the part of each buffer the NIC writes at 1500 B.
+
+| system | written lines | DRAM write | ÷ 12.6 GB/s | DRAM read | loss | lat avg/max |
+|---|---|---|---|---|---|---|
+| privRing-64 | 0.75 MiB | 577 MB/s | 5% | 81 MB/s | **1,812 pkts (0.0004%)** | 39 / 107 µs |
+| privRing-128 | 1.5 MiB | 962 MB/s | 8% | 190 MB/s | 0 | 72 / 124 µs |
+| privRing-256 | 3 MiB | 2,763 MB/s | 22% | 176 MB/s | 0 | 39 / 113 µs |
+| privRing-512 | 6 MiB | 7,001 MB/s | 56% | 363 MB/s | 0 | 42 / 107 µs |
+| privRing-1024 | 12 MiB | 10,405 MB/s | 83% | 637 MB/s | 0 | 55 / 110 µs |
+| privRing-2048 | 24 MiB | 10,494 MB/s | 83% | 653 MB/s | 0 | 43 / 114 µs |
+| privRing-4096 | 48 MiB | 10,789 MB/s | 86% | 695 MB/s | 0 | 48 / 124 µs |
+| shRing-8 (1 × 1024 shared) | 1.5 MiB | 227 MB/s | 2% | 26 MB/s | 0 | 48 / 109 µs |
+
+- **The knee sits between 128 and 1024 descriptors per queue**, i.e. ~1.5–12 MiB of posted buffers, with the steepest rise from 256 to 512 (3 → 6 MiB). Above 1024 the curve is flat at ~83–86%: everything that can leak already does. The Xeon Silver 4314 has a 24 MiB LLC; at 12 ways that is 2 MiB per way, so the knee is consistent with the default 2 DDIO ways (~4 MiB). Consistent, not proven: the posted buffers are not the whole working set (next point), so the knee does not read off `|DDIO|` directly.
+- **The default 1024 ring is past the knee on this node**, the same situation the shRing and rxBisect papers start from.
+- **shRing-8 writes less than even privRing-64**, which posts half as many buffers (512 vs 1024). The shared ring's effective working set is smaller than its posted count, and the posted count alone does not explain the curve. `mlx5_rx_burst_rmp` refills with the same `rte_mbuf_raw_alloc` as the stock path, so the difference is not a different allocator; candidates are buffers held in the TX rings and the per-lcore mempool caches. Open; to be settled by reading the code and, if needed, counting buffers per stage.
+- **privRing-64 is the first configuration that loses packets** under balanced load: 1,812 at line rate. A 64-entry ring at ~1 Mpps per queue holds ~64 µs of traffic, too little to absorb bursts. This is the trade-off the rxBisect paper reports for small privRing, and the one this project's allocator aims to remove: small working set *and* burst absorption.
+- privRing-128's 72 µs mean latency in §17.4 now looks like an outlier: 256 and 512 give 39–42 µs. Latency has no clear trend with ring size at this load.
+- **Caveat:** one run per point. Repeat the knee region (128–1024) before using the curve in the thesis.
+
+&nbsp;
