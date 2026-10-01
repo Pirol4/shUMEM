@@ -9,6 +9,9 @@
 #   sudo harness/run_l3fwd.sh privring-128
 #   sudo harness/run_l3fwd.sh shring-8
 #
+# privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
+# the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
+#
 # The whole output, including the final per-queue counters and the shRing
 # `contention` line, is saved to $RESULTS_DIR/l3fwd_<system>_<timestamp>.log.
 
@@ -32,8 +35,12 @@ NB_QUEUES=8
 COMMON_DEVARGS="rx_vec_en=0,rxq_cqe_comp_en=0"
 
 usage() {
-    echo "Usage: sudo $0 <privring-1024|privring-128|shring-8>" >&2
+    echo "Usage: sudo $0 <privring-<N>|shring-8>   (N: power of two, 64..8192)" >&2
     exit 1
+}
+
+is_ring_size() {
+    [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 64 && $1 <= 8192 && ($1 & ($1 - 1)) == 0 ))
 }
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -41,10 +48,13 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 # Sets DEVARGS and NB_RXD for the requested system.
 select_system() {
     case "$1" in
-        privring-1024) DEVARGS="rmp_en=0,$COMMON_DEVARGS";                   NB_RXD=1024 ;;
-        # Same I/O working set as shring-8 (8 x 128 = 1 x 1024 buffers) while
-        # sharing nothing: separates "sharing" from "smaller ring".
-        privring-128)  DEVARGS="rmp_en=0,$COMMON_DEVARGS";                   NB_RXD=128 ;;
+        # privring-128 has the same I/O working set as shring-8 (8 x 128 =
+        # 1 x 1024 buffers) while sharing nothing: it separates "sharing" from
+        # "smaller ring".
+        privring-*)
+            NB_RXD="${1#privring-}"
+            is_ring_size "$NB_RXD" || usage
+            DEVARGS="rmp_en=0,$COMMON_DEVARGS" ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
         shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;
         *) usage ;;
@@ -81,7 +91,9 @@ PCI="$(basename "$(readlink -f "/sys/class/net/$IFACE/device")")"
 # l3fwd rewrites the destination MAC of every forwarded packet to this one.
 # A stale MAC (they change on every re-instantiation) shows up as 100% loss.
 TGEN_MAC="${TGEN_MAC:-$(learn_neighbor_mac "$IFACE" "$TGEN_IP")}"
-[[ -n "$TGEN_MAC" ]] || die "could not learn the tgen MAC via $TGEN_IP; set TGEN_MAC=<mac>"
+# Fails while TRex holds the tgen port: its flow rules keep the ARP request
+# from reaching the tgen kernel. The MAC is the src_mac in tgen's trex_cfg.yaml.
+[[ -n "$TGEN_MAC" ]] || die "could not learn the tgen MAC via $TGEN_IP (TRex running?); run: sudo TGEN_MAC=<mac> $0 $SYSTEM"
 
 mkdir -p "$RESULTS_DIR"
 LOG="$RESULTS_DIR/l3fwd_${SYSTEM}_$(date +%Y%m%d-%H%M%S).log"

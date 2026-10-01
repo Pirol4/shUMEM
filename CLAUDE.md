@@ -568,9 +568,11 @@ Smoke test, validated 2026-09-29 (`./trex-console`, then `start -f <profile> -m 
 
 | File | Node | Role |
 |---|---|---|
-| `harness/run_l3fwd.sh <system>` | dut | Starts l3fwd as `privring-1024`, `privring-128` or `shring-8`: same binary, cores 1–8, 8 queues (queue *q* on lcore *q+1*), §15 devargs, peer MAC learned over the link. Logs to `/mydata/dpdk-research/results/`. |
+| `harness/run_l3fwd.sh <system>` | dut | Starts l3fwd as `privring-<N>` (any power of two 64–8192) or `shring-8`: same binary, cores 1–8, 8 queues (queue *q* on lcore *q+1*), §15 devargs, peer MAC learned over the link. Logs to `/mydata/dpdk-research/results/`. |
 | `harness/trex/udp_multiflow.py` | tgen | TRex profile: UDP 1500 B to `198.18.0.1` (l3fwd's built-in route back out port 0), source IP walking 4096 values so `ETH_RSS_IP` spreads it over all queues, plus a 1000 pps latency stream. |
-| `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. |
+| `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. Since 2026-10-01 rx and loss come from `rx_unicast_packets`; the switch's multicast/broadcast goes to `rx_noise_pkts` (§17.3). |
+| `harness/pcm_memory.sh <label>` | dut | Records `pcm-memory` (1 s samples, system totals) to `/mydata/exp/pcm-mem_<label>.csv`. Start ~10 s before the traffic for an idle baseline; Ctrl-C after it. |
+| `harness/pcm_summary.sh [labels]` | dut | Mean DRAM read/write over the loaded seconds (write > 20 MB/s) of each CSV. |
 
 Protocol per system: start `run_l3fwd.sh` on dut → run `rate_sweep.py --label <system> --out <csv>` on tgen → Ctrl-C l3fwd, whose log now holds the final counters.
 
@@ -606,3 +608,23 @@ Two repetitions per system, 30 s per rate. **Loss: zero for all three systems at
 - **l3fwd prints the port counters once per lcore** (8 identical copies); only the cycle lines differ per core.
 
 &nbsp;
+
+### 17.4 DRAM bandwidth separates the systems (2026-10-01)
+
+First run with `pcm-memory` beside the traffic, on a new instantiation (pause frames off, loss counted from unicast). Balanced load, 1500 B, **100% of line rate (8.2 Mpps) for 60 s**, one run per system. DRAM totals are the mean over the loaded seconds; idle is ~3 MB/s read, ~2 MB/s write.
+
+| system | loss | DRAM read | DRAM write | write ÷ NIC write rate* | latency avg/max |
+|---|---|---|---|---|---|
+| privRing-1024 | 0 | 637 MB/s | **10,405 MB/s** | ~83% | 55 / 110 µs |
+| privRing-128 | 0 | 190 MB/s | **962 MB/s** | ~8% | 72 / 124 µs |
+| shRing-8 | 0 | 26 MB/s | **227 MB/s** | ~2% | 48 / 109 µs |
+
+\* The NIC writes 8.2 Mpps × 24 cache lines (1536 B) ≈ 12.6 GB/s.
+
+- **The working-set effect is real on this node, and large.** With 8 × 1024 buffers (~16 MiB) most of every received packet is written back to DRAM: the cores and the TX DMA read it while it is still in the LLC (read stays low), but its dirty lines are evicted before the buffer comes round again. An 8× smaller ring cuts DRAM writes ~11×. So `|DDIO|` here lies between the ~2 MiB and ~16 MiB working sets (§9.1); a ring-size sweep finds the knee.
+- **It costs no throughput yet.** All three forward line rate with zero loss: ~10 GB/s of write-back fits in this node's 8-channel DRAM. Balanced 1500 B at 8 cores shows the mechanism, not a bottleneck — §17.2's tie stands for loss.
+- **shRing-8 writes ~4× less than privRing-128** although both post 1024 buffers in total. Unexplained, and it matters for this project: it says the nominal ring capacity is not the whole working set. Candidates to check, by reading the code rather than guessing: buffers held in the TX rings until completion (`nb_txd` = 1024 per queue), the 256-entry per-lcore mempool caches (8 × 256 = 2048 buffers, more than either ring), and how `mlx5_rx_burst_rmp` refills the shared ring (§9.3).
+- **privRing-128 had the highest latency** (72 µs vs 48–55). Consistent with a small ring filling during bursts, but it is one run, and §17.2 saw 11 µs run-to-run spread. Repeat before reading anything into it.
+- privRing-1024's write fell steadily over the minute (11.2 → 10.0 GB/s). Not understood; watch whether it recurs.
+- **Caveat:** one run per system. The shRing-8 CSV also holds a few seconds of an aborted run under identical settings.
+
