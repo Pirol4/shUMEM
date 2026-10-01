@@ -23,8 +23,15 @@ TX_PORT = 0
 LATENCY_PG_ID = 1          # must match the profile
 RX_DRAIN_SECONDS = 1.0     # let in-flight packets come back before reading counters
 
+# Loss is counted from unicast frames only. The CloudLab switch injects STP and
+# LLDP multicast into the link (CLAUDE.md 17.3) and ipackets counts it, which
+# under-reports loss; every frame l3fwd sends back is unicast to the tgen MAC.
+RX_UNICAST_XSTAT = "rx_unicast_packets"
+RX_NOISE_XSTATS = ("rx_multicast_packets", "rx_broadcast_packets")
+
 CSV_FIELDS = [
-    "label", "rate_pct", "duration_s", "tx_pkts", "rx_pkts", "loss_pkts", "loss_pct",
+    "label", "rate_pct", "duration_s", "tx_pkts", "rx_pkts", "rx_port_pkts", "rx_noise_pkts",
+    "loss_pkts", "loss_pct",
     "tx_mpps", "rx_mpps", "rx_gbps_l1", "lat_avg_us", "lat_min_us", "lat_max_us",
     "lat_jitter_us", "lat_dropped",
 ]
@@ -51,19 +58,33 @@ def load_streams(args):
 
 
 def run_one_rate(client, streams, rate_pct, duration):
-    """Offer `rate_pct`% of line rate for `duration` seconds; return the raw stats."""
+    """Offer `rate_pct`% of line rate for `duration` seconds.
+
+    Returns the port stats and the NIC xstats; clear_stats() above resets both,
+    so every counter covers this rate only.
+    """
     client.reset(ports=[TX_PORT])
     client.add_streams(streams, ports=[TX_PORT])
     client.clear_stats()
     client.start(ports=[TX_PORT], mult="%g%%" % rate_pct, duration=duration)
     client.wait_on_traffic(ports=[TX_PORT])
     time.sleep(RX_DRAIN_SECONDS)
-    return client.get_stats()
+    return client.get_stats(), client.get_xstats(TX_PORT)
 
 
-def summarize(label, rate_pct, duration, stats, pkt_size):
+def read_xstat(xstats, name):
+    """Return one NIC counter, failing loudly if this driver does not expose it."""
+    if name not in xstats:
+        raise RuntimeError("xstat %r not exposed by this NIC; available: %s"
+                           % (name, ", ".join(sorted(xstats))))
+    return xstats[name]
+
+
+def summarize(label, rate_pct, duration, stats, xstats, pkt_size):
     port = stats[TX_PORT]
-    tx, rx = port["opackets"], port["ipackets"]
+    tx = port["opackets"]
+    rx = read_xstat(xstats, RX_UNICAST_XSTAT)
+    rx_noise = sum(read_xstat(xstats, name) for name in RX_NOISE_XSTATS)
     loss = tx - rx
     wire_bits_per_pkt = (pkt_size + 4 + 20) * 8   # + FCS + preamble/SFD/IFG
     latency = stats.get("latency", {}).get(LATENCY_PG_ID, {})
@@ -74,6 +95,8 @@ def summarize(label, rate_pct, duration, stats, pkt_size):
         "duration_s": duration,
         "tx_pkts": tx,
         "rx_pkts": rx,
+        "rx_port_pkts": port["ipackets"],
+        "rx_noise_pkts": rx_noise,
         "loss_pkts": loss,
         "loss_pct": round(100.0 * loss / tx, 6) if tx else 0.0,
         "tx_mpps": round(tx / duration / 1e6, 4),
@@ -106,11 +129,12 @@ def main():
     try:
         client.acquire(ports=[TX_PORT], force=True)
         for rate_pct in rates:
-            stats = run_one_rate(client, streams, rate_pct, args.duration)
-            row = summarize(args.label, rate_pct, args.duration, stats, args.pkt_size)
+            stats, xstats = run_one_rate(client, streams, rate_pct, args.duration)
+            row = summarize(args.label, rate_pct, args.duration, stats, xstats, args.pkt_size)
             append_row(args.out, row)
-            print("%-16s %5.1f%%  tx=%d rx=%d loss=%.4f%%  lat avg/max=%s/%s us" % (
-                args.label, rate_pct, row["tx_pkts"], row["rx_pkts"], row["loss_pct"],
+            print("%-16s %5.1f%%  tx=%d rx=%d noise=%d loss=%.4f%%  lat avg/max=%s/%s us" % (
+                args.label, rate_pct, row["tx_pkts"], row["rx_pkts"], row["rx_noise_pkts"],
+                row["loss_pct"],
                 row["lat_avg_us"], row["lat_max_us"]))
     finally:
         client.disconnect()
