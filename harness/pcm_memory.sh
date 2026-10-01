@@ -25,6 +25,8 @@ mkdir -p "$EXP_DIR"
 CSV="$EXP_DIR/pcm-mem_$LABEL.csv"
 [[ -e "$CSV" ]] && die "$CSV exists; move it away or pick another label"
 
-echo "recording to $CSV — start the traffic in ~10 s, Ctrl-C when it ends"
-# 1 s samples; -nc keeps only per-socket and system totals.
-"$PCM_MEMORY" 1 -nc -csv="$CSV" >/dev/null
+echo "pcm-memory: recording to $CSV — start the traffic in ~10 s, Ctrl-C when it ends"
+# 1 s samples; -nc keeps only per-socket and system totals. Pinned to core 0,
+# which run_l3fwd.sh leaves to the OS, so PCM never preempts a polling lcore.
+# exec: the caller's PID is PCM itself, so a signal to it reaches PCM.
+exec taskset -c 0 "$PCM_MEMORY" 1 -nc -csv="$CSV" >/dev/null

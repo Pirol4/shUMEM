@@ -12,12 +12,17 @@
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
 #
+# With PCM_LABEL set, pcm_memory.sh records DRAM bandwidth for the whole life
+# of l3fwd, idle start-up included, and stops with it:
+#   sudo PCM_LABEL=privring-256_r2 TGEN_MAC=<mac> harness/run_l3fwd.sh privring-256
+#
 # The whole output, including the final per-queue counters and the shRing
 # `contention` line, is saved to $RESULTS_DIR/l3fwd_<system>_<timestamp>.log.
 
 set -euo pipefail
 
 SYSTEM="${1:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SHRING_DIR="${SHRING_DIR:-/mydata/dpdk-research/shring-dpdk}"
 RESULTS_DIR="${RESULTS_DIR:-/mydata/dpdk-research/results}"
@@ -100,6 +105,16 @@ LOG="$RESULTS_DIR/l3fwd_${SYSTEM}_$(date +%Y%m%d-%H%M%S).log"
 
 echo "system=$SYSTEM pci=$PCI devargs=$DEVARGS nb_rxd=$NB_RXD tgen_mac=$TGEN_MAC"
 echo "log: $LOG"
+
+if [[ -n "${PCM_LABEL:-}" ]]; then
+    [[ ! -e "${EXP_DIR:-/mydata/exp}/pcm-mem_$PCM_LABEL.csv" ]] \
+        || die "pcm-mem_$PCM_LABEL.csv exists; pick another PCM_LABEL"
+    "$SCRIPT_DIR/pcm_memory.sh" "$PCM_LABEL" &
+    PCM_PID=$!
+    # Ctrl-C normally reaches PCM directly (it installs its own SIGINT
+    # handler); TERM covers every other way this script can end.
+    trap 'kill -TERM "$PCM_PID" 2>/dev/null || true; wait "$PCM_PID" 2>/dev/null || true' EXIT
+fi
 
 # tee -i: Ctrl-C reaches the whole pipeline. Plain tee dies on it at once,
 # while l3fwd only prints its final counters after handling the signal, so
