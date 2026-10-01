@@ -740,3 +740,22 @@ Balanced load, 100% line rate, 30 s. A CPU hog shares lcore 4 (queue 3): `sudo n
 
 &nbsp;
 
+### 17.10 Controlled stalls match a simple model (2026-10-01)
+
+`stall_core.py --core 4 --stall-us 1000 --period-ms 100` (lcore 4 = queue 3; it reported mean stall 1,000 µs, 1.00% of the CPU), balanced load, 100% line rate, 30 s, so ~300 stalls inside the traffic window. Queue 3's unstalled share is 30,694,089 packets (from the privRing-1024 run: received + missed; every other queue's count is the deterministic one of §17.9), i.e. **1,023 packets per ms**; all queues together bring **8.20 packets per µs**. In every run the per-queue counts plus `rx_missed_errors` add up exactly to TRex's tx.
+
+| system | model per stall | model total | measured `rx_missed_errors` | per stall | where |
+|---|---|---|---|---|---|
+| privRing-1024 | max(0, 1,023 − 1,024) = 0 | 0 | 2,074 | 6.9 | q3 only |
+| privRing-128 | 1,023 − 128 = 895 | 268.5 k | **270,213** | 900.7 | q3 only |
+| shRing-8 | (1,000 − 1,024/8.20) × 8.20 = 7,178 | 2.15 M | **2,183,169** | 7,277 | **272–273 k on each of the 8 queues** |
+
+- **The model predicts the loss within 1.5%** for both small-ring privRing and shRing, and privRing-1024 sits at the edge (its ring holds ~1 ms of one queue's traffic, so ~7 packets per stall spill). The mechanism is understood quantitatively, not just qualitatively:
+  - privRing: a stalled queue loses what arrives beyond its own ring capacity, `rate_q × stall − N`; nobody else notices.
+  - shRing: once the stalled core blocks the in-sequence head, the *whole* NIC's arrival rate drains the shared ring in `B / rate_total` (125 µs for 1,024 buffers at 8.2 Mpps), and everything after that is lost **on every queue alike**.
+- **Same 1,024 buffers, 8× the loss:** shRing-8 loses 2.18 M where privRing-128 loses 0.27 M. Sharing helps when cores keep up (§17.7–17.8) and hurts badly when one does not.
+- **Latency is not informative here:** the latency stream sits on queue 0, and packets lost during a stall do not count; privRing-1024's 136 µs mean (q0 unstalled) is unexplained run-to-run variation of the kind §17.6 saw.
+- **The design target this sets for Phase 1:** shRing's two properties come from the same structure — one shared ring gives the hot queue idle queues' buffers (good) and one in-sequence head (bad). The mempool is *already* shared by all privRing queues; what privRing lacks is a way for a hot queue to have more buffers *posted*. So the contribution is a per-queue posted-buffer budget drawn from a global one (the credit pool of §4): small and private by default, so a stall stays local (privRing's row above), growable for a hot queue (shRing's §17.7 row). §9.3–9.5 now have a concrete question: can the mlx5 RQ keep fewer WQEs posted than its size and post more on demand?
+
+&nbsp;
+
