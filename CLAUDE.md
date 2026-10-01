@@ -678,3 +678,25 @@ Two more runs (r2, r3) of each point, PCM now started by `run_l3fwd.sh` and pinn
 
 &nbsp;
 
+### 17.7 First imbalance run: one hot queue (2026-10-01)
+
+`--hot-share 0.5` at 100% line rate, 30 s per system, one run each. RSS split confirmed from l3fwd's xstats: queue 0 got 138.4 M of 246.1 M packets (**56.3%**), each other queue 15.4 M (6.25%) — one core at ~4.6 Mpps, seven at ~0.5 Mpps. The latency stream shares queue 0, so latency is the hot queue's.
+
+| system | posted buffers | loss (pkts) | loss % | DRAM write | DRAM read | lat avg/max (hot queue) |
+|---|---|---|---|---|---|---|
+| privRing-1024 | 8 × 1024 | **0** | 0 | 6,919 MB/s | 876 MB/s | **161 / 217 µs** |
+| privRing-256 | 8 × 256 | 5,940 | 0.0024% | 1,624 MB/s | 149 MB/s | 62 / 136 µs |
+| privRing-128 | 8 × 128 | 13,556 | 0.0055% | 550 MB/s | 63 MB/s | 55 / 134 µs |
+| privRing-64 | 8 × 64 | 17,329 | 0.0070% | 451 MB/s | 92 MB/s | 58 / 133 µs |
+| **shRing-8** | 1 × 1024 shared | **170** | 0.0001% | 1,138 MB/s | 228 MB/s | 93 / 158 µs |
+
+Label hygiene for whoever reads `/mydata/exp`: the privRing-128 run is `hot50_privring-128_certo` in PCM and was mislabelled `hot50_privring-1024` in tgen's `probe.csv` (second row with that label); `hot50_privring-128` in PCM is an aborted start with no traffic.
+
+- **Imbalance turns the small-ring trade-off into loss.** Under balanced load only privRing-64 lost; with one hot queue every small privRing loses, monotonically in ring size (64 > 128 > 256 > 1024 = 0). The hot queue drains its ring ~9× faster than balanced, so a 128-entry ring holds only ~28 µs of its traffic.
+- **shRing-8 is the paper's result reproduced:** with the same 1024 buffers as privRing-128 it loses **80× less** (170 vs 13,556), close to privRing-1024, while writing **6× less DRAM** than privRing-1024. The hot queue borrows the idle queues' buffers.
+- **The cost moved to latency.** On the hot queue privRing-1024 queues packets the longest (161 µs) — a deep ring is a long queue; small privRings stay at 55–62 µs because what would wait is dropped instead; shRing sits between (93 µs).
+- privRing-1024's DRAM write fell from 10.3 GB/s balanced to 6.9 GB/s here. Not yet understood (the hot ring recycles ~9× faster, the cold ones ~2× slower).
+- **Not yet shown: shRing's bottleneck.** The shRing paper (and this project's motivation, §3) says the shared ring degrades under imbalance through contention; one hot queue at 50% did not break it. Next: shRing `contention` for this run, repetitions, and a `hot_share` sweep (0.25 / 0.75) to find where it does break — that regime is where the contribution has to win.
+
+&nbsp;
+
