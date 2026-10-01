@@ -573,6 +573,7 @@ Smoke test, validated 2026-09-29 (`./trex-console`, then `start -f <profile> -m 
 | `harness/trex/rate_sweep.py` | tgen | Offers the profile at 10/25/50/75/90/100% for 30 s each, appends one CSV row per rate: tx/rx packets, loss, Mpps, Gb/s, latency avg/min/max/jitter. Since 2026-10-01 rx and loss come from `rx_unicast_packets`; the switch's multicast/broadcast goes to `rx_noise_pkts` (§17.3). |
 | `harness/pcm_memory.sh <label>` | dut | Records `pcm-memory` (1 s samples, system totals, pinned to core 0) to `/mydata/exp/pcm-mem_<label>.csv`. Easiest through `run_l3fwd.sh` with `PCM_LABEL=<label>`, which records for l3fwd's whole life and stops with it. |
 | `harness/stall_core.py --core C --stall-us S --period-ms P` | dut | Stalls one lcore (root, `SCHED_FIFO`) for S µs every P ms and reports the stalls it made (§17.9). |
+| `analysis/stall_model.py` | anywhere (needs matplotlib) | Stall-loss model vs measurements (§17.11): table on stdout, `docs/figures/stall_loss.{png,pdf}`. |
 | `harness/pcm_summary.sh [labels]` | dut | Mean DRAM read/write over the loaded seconds (write > 20 MB/s) of each CSV. |
 
 Protocol per system: start `run_l3fwd.sh` on dut → run `rate_sweep.py --label <system> --out <csv>` on tgen → Ctrl-C l3fwd, whose log now holds the final counters.
@@ -756,6 +757,23 @@ Balanced load, 100% line rate, 30 s. A CPU hog shares lcore 4 (queue 3): `sudo n
 - **Same 1,024 buffers, 8× the loss:** shRing-8 loses 2.18 M where privRing-128 loses 0.27 M. Sharing helps when cores keep up (§17.7–17.8) and hurts badly when one does not.
 - **Latency is not informative here:** the latency stream sits on queue 0, and packets lost during a stall do not count; privRing-1024's 136 µs mean (q0 unstalled) is unexplained run-to-run variation of the kind §17.6 saw.
 - **The design target this sets for Phase 1:** shRing's two properties come from the same structure — one shared ring gives the hot queue idle queues' buffers (good) and one in-sequence head (bad). The mempool is *already* shared by all privRing queues; what privRing lacks is a way for a hot queue to have more buffers *posted*. So the contribution is a per-queue posted-buffer budget drawn from a global one (the credit pool of §4): small and private by default, so a stall stays local (privRing's row above), growable for a hot queue (shRing's §17.7 row). §9.3–9.5 now have a concrete question: can the mlx5 RQ keep fewer WQEs posted than its size and post more on demand?
+
+&nbsp;
+
+### 17.11 Stall-length sweep: the model holds from 250 µs to 2 ms (2026-10-01)
+
+Same setup as §17.10, stalls of 250 / 500 / 1000 / 2000 µs every 100 ms (300 per run). `analysis/stall_model.py` holds the data, prints model vs measured and draws `docs/figures/stall_loss.{png,pdf}` (one panel per system, shared y axis). Nothing is fitted.
+
+| system | 250 µs | 500 µs | 1000 µs | 2000 µs |
+|---|---|---|---|---|
+| privRing-1024 model / measured | 0 / 0 | 0 / 0 | 0 / 2,074 | 306,682 / 308,862 (+0.7%) |
+| privRing-128 model / measured | 38,335 / 39,911 (+4.1%) | 115,070 / 116,648 (+1.4%) | 268,541 / 270,213 (+0.6%) | 575,482 / 577,140 (+0.3%) |
+| shRing-8 model / measured | 307,958 / 335,119 (+8.8%) | 923,116 / 952,243 (+3.2%) | 2,153,432 / 2,183,169 (+1.4%) | 4,614,065 / 4,641,334 (+0.6%) |
+
+- **The model holds across an 8× range of stall lengths.** The measured excess is a near-constant number of packets per stall, not a proportion — ~5 for privRing-128, ~95 for shRing-8 — which is why the relative error is largest at 250 µs. ~5 packets at one queue's 1.02 per µs is ~5 µs, plausibly the extra time the stall really takes (wake-up and context switch around the busy-wait). For shRing those 5 µs explain only ~40 of the ~95; the rest would mean ~50 fewer usable buffers than 1,024 — consistent with the head moving in 64-entry blocks (§17.8), which leaves up to 63 consumed buffers not yet returned to the NIC at any moment. A hypothesis, not checked.
+- **privRing-1024 starts losing once the stall outlasts its ring** (between 1 and 2 ms, as predicted): a bigger ring only moves the threshold. shRing loses at every stall length, because its ring is drained by the whole NIC, not one queue.
+- **One count does not reconcile:** at 2 ms, privRing-1024's TRex loss is 310,640 but `rx_missed_errors` is 308,862 — 1,778 packets (0.6%) lost somewhere other than ring starvation, the only run of the day where the two differ. Candidate: l3fwd drops on TX when, after a 2 ms backlog, a full ring's worth is forwarded in one go and the TX queue is full (l3fwd frees what `rte_eth_tx_burst` refuses, and no counter shown here records it). Unchecked.
+- The 2 ms point at 0.13–1.9% loss and the 1 ms point are the clearest pair for the thesis: same buffers, shRing loses 8× what privRing-128 loses.
 
 &nbsp;
 
