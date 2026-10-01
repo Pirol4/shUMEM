@@ -700,3 +700,24 @@ Label hygiene for whoever reads `/mydata/exp`: the privRing-128 run is `hot50_pr
 
 &nbsp;
 
+### 17.8 Imbalance sweep, and why shRing's contention falls (2026-10-01)
+
+`hot_share` 0.25 / 0.5 / 0.75, 100% line rate, 30 s, one run each (0.5 from §17.7). Hot-queue share from `rx_q0_packets`. Loss is TRex's, and **in every run it equals l3fwd's `rx_missed_errors` exactly** — all loss is ring starvation, none on TX or in the mempool (`nombuf` 0).
+
+| hot_share | queue 0 | privRing-1024 loss / lat | privRing-128 loss / lat | shRing-8 loss / lat | shRing `contention` |
+|---|---|---|---|---|---|
+| 0 (balanced, §17.6, 60 s) | 12.5% | 0 / ~40 µs | 0 / ~40 µs | 0–198 / ~45 µs | ~255 k per 60 s |
+| 0.25 | 34.4% | 0 / 138 µs | 5,291 / 77 µs | **0** / 90 µs | 97,776 |
+| 0.5 | 56.3% | 0 / 161 µs | 13,556 / 55 µs | 170 / 93 µs | 32,142 |
+| 0.75 | 78.1% | 0\* / 126 µs | 21,753 / 49 µs | 64 / 140 µs | 6,824 |
+
+\* TRex saw 13 *more* unicast frames than it sent: something besides l3fwd's forwarding sends unicast to the tgen MAC (the dut kernel shares the port; §17.3's ARP probes are one known source). Loss resolution from TRex is therefore ~±tens of packets; `rx_missed_errors` on the dut is the exact count.
+
+- **One core handles 78% of line rate** (~6.4 Mpps at 1500 B) without loss under privRing-1024, so none of this loss is CPU-bound.
+- **privRing-128's loss grows with the skew** (0 → 5 k → 14 k → 22 k); **shRing-8 stays near zero** at every skew with the same 1024 buffers. Under a hot-queue imbalance shRing is not the bottleneck — it is the best of the small-working-set systems.
+- **shRing's `contention` falls as the skew rises** (≈128 k per 30 s balanced → 6.8 k at 0.75). Reading the code explains it: `contention` counts only failed CAS on the shared ring's head (`mlx5_rx.c:1134-1141`), i.e. two cores trying to advance it at the same moment. Fewer active cores, fewer races.
+- **The head advances only in sequence** (`mlx5_rx.c:1119-1146`): it moves by a 64-entry block once *every* entry of that block has been consumed, whoever's queue it landed on, and only then does the doorbell hand those buffers back to the NIC. A core that falls behind therefore holds back buffer return for **all** queues — head-of-line blocking. That, not CAS contention, is the mechanism by which shRing should degrade, and a hot queue served by a core that keeps up never triggers it. **Hypothesis to test:** stall one core (not overload the link) and shRing should lose on every queue while privRing loses only on the stalled one. The unexplained 198-packet loss in balanced shRing r3 (§17.6) fits it if an OS hiccup paused one lcore — `isolcpus` is still off (§15.5).
+- **Implication for this project's framing (§3):** "shRing bottlenecks under imbalanced load" needs to say *which* imbalance. Skewed packet rates with cores that keep up do not hurt it here; a slow or stalled consumer should. Check this against the rxBisect paper's own description before writing it into the thesis.
+
+&nbsp;
+
