@@ -13,8 +13,8 @@ Follow these on every session unless I say otherwise:
 &nbsp;
 
 - **I am learning, so explain to the maximum depth.** I need to deeply understand every change we make and *why* — not just receive working code. When you propose a change, explain the mechanism, the trade-offs, and how it fits the overall design before showing code.  
-- **I apply changes manually.** Do not patch files directly. Give me the change and let me apply it myself.  
-- **Guide me one step at a time.** Prefer single, ordered commands over large multi-command blocks, so I can run and verify each step.  
+- **Claude applies the changes (revised 2026-10-05; I used to apply them by hand).** Edit the files, build, commit in my name (no co-author trailer) and push — harness and docs in `shUMEM`, driver code on the `fill-ring` branch of the fork. The explanation still comes first and in full: I must be able to defend every line. Never paste or ask for tokens in the chat; if a push is refused, stop and tell me.  
+- **Guide me one step at a time on the nodes.** I run the CloudLab commands myself and paste the output; prefer single, ordered commands over large blocks, so I can run and verify each step. One small commit per step in the driver, each building on its own.  
 - **All code in English**, following clean-code practices and good naming. Keep functions small, intentions explicit, and comments meaningful.  
 - **Investigate before generating.** For anything touching DPDK internals or the mlx5 PMD, read the actual source in the repos first (see §7) and reason from it. Do not invent PMD behavior from memory — verify it.
 
@@ -812,6 +812,27 @@ Same setup as §17.10, stalls of 250 / 500 / 1000 / 2000 µs every 100 ms (300 p
 2. **Initialization.** `mlx5_rxq_initialize` and the elts allocation assume a full ring (`rxq_alloc_elts_sprq`, `mlx5_rxq.c`); with a budget only the first `budget` slots are posted, and stop/free paths (`rxq_free_elts_sprq`) must free only slots that hold an mbuf.
 3. **Error recovery** (`mlx5_rx_err_handle`, `mlx5_rx.c:~500`) re-posts the whole ring; it must restore `budget`, not `wqe_n`.
 4. **Scatter (`sges_n`) and CQE compression** are off in our configuration (§15); the first version asserts that rather than supporting them.
+
+&nbsp;
+
+### 18.4 How the design follows AF_XDP and the two papers (read 2026-10-05)
+
+**AF_XDP** (docs.ebpf.io). The FILL ring is where the process *produces* chunk addresses for the kernel to fill; the RX ring is where the kernel *produces* descriptors of filled chunks. Both are single-producer, single-consumer. If the FILL ring is empty the packet is dropped. With `XDP_SHARED_UMEM` across queues, the UMEM is one but **each (netdev, queue) pair gets its own FILL ring** and each socket its own RX ring, and the docs leave to the process the "algorithms to maintain a desired balance of chunks". That is this design's shape exactly: one mempool, a private FILL position per queue written only by that queue's lcore (so no cross-core synchronisation on the datapath, unlike shRing), and the balancing algorithm is the credit pool of Phase 3.
+
+**rxBisect** (OSDI '25) names the same split: *allocation* (Ax) rings, where a core produces empty buffers, and *bisected reception* (Bx) rings, where the NIC produces packets; "the number of allocated buffers in each Ax ring can be smaller than the size of the Bx rings, which is the key to reducing the I/O working set". Its receive loop (Listing 1) is: consume a Bx entry, hand up the packet, allocate a replacement into the Ax ring, advance the Ax tail and ring its doorbell — the loop of §18.2 with `fill_budget` as |Ax|. Its sizing rules (§4.5) give our defaults: |Bx| = 1024 to absorb bursts; k × |Ax| × 1500 B ≤ |DDIO| and k × |Ax| ≥ |Bx|, with a vendor minimum of 64. For 8 queues that is **|Ax| = 128**: 8 × 128 = 1024, and ~1.5 MiB, below the knee measured in §17.5.
+
+In mlx5 terms the Bx ring already half exists: packets are *delivered* through the completion queue (CQ), a separate ring of descriptors, while the RQ holds the buffers. What ties them is only the in-place refill of §18.1.
+
+**Where we differ from rxBisect, and must say so.** In rxBisect the *NIC* takes a buffer from another core's Ax ring when the target's is empty; that needs an ASIC change, and the paper evaluates it with a software NIC on a dedicated emulator core. A commodity NIC fills a queue only from that queue's posted WQEs, so here buffers move between queues in *software*: a queue that runs low takes credits from the shared pool and posts further ahead. Consequence: it can help a hot queue whose core is running, but not a core that is not polling at all — that queue is bounded by what it had posted, like privRing with that ring size. No ASIC change and no emulator core is the trade.
+
+**Both papers describe shRing's bottleneck the way §17.9–17.11 measured it:** overloaded cores, whose service rate is below their arrival rate, "monopolize" the shared ring and packets to healthy cores are dropped (shRing §4.5, rxBisect §3.2 and Fig. 6c); dynamic shRing turns itself off in that case. So §3's "bottlenecks under imbalanced load" means *a consumer that cannot keep up*, not skewed rates as such — which is why a hot queue on a core that kept up did not hurt it (§17.8). rxBisect's stated property is the target: an overloaded core "can only hog packet buffers… but cannot interfere with packet reception by other cores".
+
+&nbsp;
+
+### 18.5 Progress
+
+- **Step 2 done (fork `502d9a270`):** `fill_en` and `fill_budget` are parsed and validated (`mlx5.c`, `mlx5_fill_args_validate`); `fill_en` needs a budget > 0 and excludes `rmp_en`. Datapath untouched. Builds locally (`/root/shRing-dpdk/build`, Ubuntu 24.04); not yet run on a NIC.
+- **Next, step 3:** queue setup posts only `fill_budget` WQEs (and checks it against the ring size); stop/free release only slots that hold an mbuf. Then step 4, the receive function with separate read and post indices.
 
 &nbsp;
 
