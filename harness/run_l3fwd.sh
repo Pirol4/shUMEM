@@ -8,6 +8,10 @@
 #   sudo harness/run_l3fwd.sh privring-1024
 #   sudo harness/run_l3fwd.sh privring-128
 #   sudo harness/run_l3fwd.sh shring-8
+#   sudo harness/run_l3fwd.sh fill-128
+#
+# fill-<B> is our FILL-ring path (CLAUDE.md section 18): a 1024-entry ring per
+# queue of which only B buffers are kept posted. B is 1..1024.
 #
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
@@ -39,8 +43,15 @@ NB_QUEUES=8
 # Mandatory on every system, not only shRing: see CLAUDE.md section 15.1.
 COMMON_DEVARGS="rx_vec_en=0,rxq_cqe_comp_en=0"
 
+# Ring a fill-<B> queue posts its budget into: the default 1024, as privRing.
+FILL_RING_SIZE=1024
+
+# Extra EAL arguments for the selected system; empty for the baselines.
+EAL_EXTRA=()
+
 usage() {
-    echo "Usage: sudo $0 <privring-<N>|shring-8>   (N: power of two, 64..8192)" >&2
+    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>>" >&2
+    echo "       N: power of two, 64..8192;  B: 1..$FILL_RING_SIZE" >&2
     exit 1
 }
 
@@ -60,6 +71,15 @@ select_system() {
             NB_RXD="${1#privring-}"
             is_ring_size "$NB_RXD" || usage
             DEVARGS="rmp_en=0,$COMMON_DEVARGS" ;;
+        # Same ring as privring-1024, same posted buffers as privring-<B>. The
+        # driver reports the posted count per queue at INFO level, which is the
+        # only direct evidence that the ring really runs below full.
+        fill-*)
+            local budget="${1#fill-}"
+            [[ "$budget" =~ ^[0-9]+$ ]] && (( budget >= 1 && budget <= FILL_RING_SIZE )) || usage
+            DEVARGS="fill_en=1,fill_budget=$budget,$COMMON_DEVARGS"
+            NB_RXD=$FILL_RING_SIZE
+            EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
         shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;
         *) usage ;;
@@ -119,7 +139,7 @@ fi
 # tee -i: Ctrl-C reaches the whole pipeline. Plain tee dies on it at once,
 # while l3fwd only prints its final counters after handling the signal, so
 # without -i the log loses exactly the lines that matter.
-"$L3FWD" -l "$CORES" -n 4 -a "$PCI,$DEVARGS" -- \
+"$L3FWD" -l "$CORES" -n 4 -a "$PCI,$DEVARGS" "${EAL_EXTRA[@]}" -- \
     -p 0x1 \
     --config="$(queue_config)" \
     --eth-dest="0,$TGEN_MAC" \

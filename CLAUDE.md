@@ -831,8 +831,20 @@ In mlx5 terms the Bx ring already half exists: packets are *delivered* through t
 
 ### 18.5 Progress
 
-- **Step 2 done (fork `502d9a270`):** `fill_en` and `fill_budget` are parsed and validated (`mlx5.c`, `mlx5_fill_args_validate`); `fill_en` needs a budget > 0 and excludes `rmp_en`. Datapath untouched. Builds locally (`/root/shRing-dpdk/build`, Ubuntu 24.04); not yet run on a NIC.
-- **Next, step 3:** queue setup posts only `fill_budget` WQEs (and checks it against the ring size); stop/free release only slots that hold an mbuf. Then step 4, the receive function with separate read and post indices.
+- **Step 2 (fork `502d9a270`):** `fill_en` and `fill_budget` are parsed and validated (`mlx5.c`, `mlx5_fill_args_validate`): a budget of 1–65535, not together with `rmp_en`, `rx_vec_en` or `mprq_en`.
+- **Step 4 (fork `9884138a1`):** `mlx5_rx_burst_fill()` and `mlx5_rxq_fill_post()` in `mlx5_rx.c`. `rq_pi` counts WQEs consumed (RX-ring consumer), `rq_ci` WQEs posted (FILL-ring producer, the doorbell value); the slot a packet is read from is left `NULL` and fresh buffers go to `rq_ci` until `rq_ci − rq_pi` is back at `fill_budget`. Allocation is per buffer with `rte_mbuf_raw_alloc`, as in the stock path, to keep the allocator cost comparable. One deliberate difference from stock: reception does not wait for the replacement buffer, so a failed allocation delays posting, not delivery.
+- **Step 3 (fork `b46c129b8`):** queue setup checks single-segment and budget ≤ ring (`mlx5_rxq_new`), allocates only `fill_budget` mbufs (`rxq_alloc_elts_sprq`), and `mlx5_rxq_fill_initialize()` writes every WQE's size and lkey, packs the held buffers into the first slots and sets the doorbell to their count. `mlx5_select_rx_function` returns the new burst when `fill_en` is set. Stop/free needed no change.
+- **`harness/run_l3fwd.sh fill-<B>`** runs it: ring 1024, budget B, §15 devargs, and `--log-level=pmd.net.mlx5:info` so each queue prints `FILL-ring mode, B of 1024 WQEs posted`.
+- **Verified so far:** the whole tree builds here (Ubuntu 24.04, gcc 13) with no new warnings, and a model of the index logic (NIC filling in ring order up to the doorbell, random bursts, allocation failures, resets) holds its invariants over 20,000 steps for five ring/budget pairs. **Not verified:** anything on a NIC. The error-recovery path cannot be provoked on demand.
+- **With `fill_en=0` nothing changes** except one predictable branch at the top of `mlx5_rxq_initialize` and of `mlx5_select_rx_function`, both off the datapath; `mlx5_rx_burst` itself is untouched. The baselines should still be re-measured once on this binary before being compared with it.
+
+### 18.6 First test on the nodes (next)
+
+On a fresh instantiation the setup clones the fork's `fill-ring` branch. In order:
+
+1. **It starts:** `run_l3fwd.sh fill-128` prints the eight `FILL-ring mode, 128 of 1024 WQEs posted` lines and reaches the main loop.
+2. **It forwards:** 10% of line rate for 10 s with zero loss and the usual per-queue split. This also retires risk 1 of §18.3 — the NIC running with a permanent large gap.
+3. **It refuses bad arguments:** `fill_budget` above the ring, or `fill_en` with `rmp_en`, fails at start with the message, not at run time.
+4. **It measures like privRing-128** (Phase 1's criterion), same three tests, with privRing-128 and privRing-1024 re-run beside it on the same binary: DRAM write at 100% (§17.6), one hot queue (§17.8), one stalled core at 1 ms (§17.10: loss only on queue 3, ≈ 270 k).
 
 &nbsp;
-
