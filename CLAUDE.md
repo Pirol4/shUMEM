@@ -148,9 +148,9 @@ Answer these by reading the source and, where needed, running small probes. Do n
 
 1. **DDIO node.** ✅ Node type fixed by `profile.py`: `sm110p` (see §8.1). ✅ **Instrumentation confirmed (2026-09-28):** PCM reads this node's uncore — `pcm-pcie` returns `PCIRdCur` / `ItoM` / `ItoMCacheNear`, which are the DDIO events, and `pcm-memory` reports all 8 memory channels. Still open: the *value* of `|DDIO|` here. Measure it empirically rather than from an MSR whose address is microarchitecture-specific — sweep the ring size under load and find the knee where `pcm-memory` bandwidth rises and the `pcm-pcie` hit ratio falls, which is the paper's Figure 3 experiment. That needs the traffic generator first (§10, Phase 0). For reference, the shRing paper runs with **2 DDIO ways** (of 11, on a 22 MiB LLC ≈ 4 MiB).  
 2. **Fork point.** ✅ **RESOLVED (2026-09-28): build on `shRing-dpdk`.** Diffing it against upstream settles it. `git merge-base` lands exactly on the `v21.05` release commit (`175af2573`), so the fork is clean and its whole delta is 13 commits / 26 files / ~3.1k inserted lines. Decisively, every shRing datapath change is gated behind the `rmp_en` devarg and adds *separate* burst functions (`mlx5_rx_burst_rmp`, `mlx5_rx_burst_rmp_mprq`) rather than altering the stock ones — so **one binary yields both baselines**: `rmp_en=0` is privRing, `rmp_en=1,rqs_per_rmp=N` is shRing. Building here removes the DPDK-version confounder from the comparison entirely. The vanilla `v21.05` tree is kept only to validate that equivalence and to diff against while reading. Caveat: shRing also patches `examples/l3fwd`, so the two trees' `l3fwd` binaries are **not** identical — hence the validation is required, not assumed.  
-3. **mlx5 Rx path.** Where exactly does the mlx5 PMD refill the Rx ring from the mempool? What is the smallest hook point to insert a FILL/credit step without rewriting the datapath?  
-4. **UMEM \= mempool?** Confirm that a single shared `rte_mempool` is the right "UMEM" abstraction, and how per-core FILL rings draw from it.  
-5. **Allocator semantics.** What does a "credit" represent (chunks? bytes? descriptors?), and what is the rebalancing policy under imbalance?  
+3. **mlx5 Rx path.** ✅ **Answered by reading the source (2026-10-05), §18.1:** the scalar `mlx5_rx_burst` refills each consumed slot in place, one for one, so the ring is always full; the hook is to post at a separate producer index instead. Still to prove on a node: that the NIC runs indefinitely with far fewer posted WQEs than the ring size.  
+4. **UMEM \= mempool?** ✅ **Yes (§18.1):** l3fwd already creates one `rte_mempool` per port and socket and every Rx queue refills from it — the UMEM is shared today, under privRing too. What is private is the *posted* set.  
+5. **Allocator semantics.** Half answered (§18.2): **a credit is one posted buffer** (one WQE the NIC may fill). The rebalancing policy is Phase 3's research question and is still open.  
 6. **Measurement.** How do we measure LLC misses / memory-bandwidth pressure on the chosen node (e.g., PMU counters), not just throughput?
 
 &nbsp;
@@ -774,6 +774,43 @@ Same setup as §17.10, stalls of 250 / 500 / 1000 / 2000 µs every 100 ms (300 p
 - **privRing-1024 starts losing once the stall outlasts its ring** (between 1 and 2 ms, as predicted): a bigger ring only moves the threshold. shRing loses at every stall length, because its ring is drained by the whole NIC, not one queue.
 - **One count does not reconcile:** at 2 ms, privRing-1024's TRex loss is 310,640 but `rx_missed_errors` is 308,862 — 1,778 packets (0.6%) lost somewhere other than ring starvation, the only run of the day where the two differ. Candidate: l3fwd drops on TX when, after a 2 ms backlog, a full ring's worth is forwarded in one go and the TX queue is full (l3fwd frees what `rte_eth_tx_burst` refuses, and no counter shown here records it). Unchecked.
 - The 2 ms point at 0.13–1.9% loss and the 1 ms point are the clearest pair for the thesis: same buffers, shRing loses 8× what privRing-128 loses.
+
+&nbsp;
+
+---
+
+## 18\. Phase 1 design: a posted-buffer budget per queue (2026-10-05)
+
+&nbsp;
+
+### 18.1 What the source says (shRing tree, `drivers/net/mlx5`, privRing path)
+
+- **The RQ is a cyclic work queue** (`MLX5_WQ_TYPE_CYCLIC`, `mlx5_devx.c:297`) of `nb_rxd` WQEs. Each WQE holds one buffer address; the NIC fills them in ring order. Software tells the NIC how far it may go by writing a free-running counter to the doorbell record `rq_db`: "WQEs posted so far".
+- **At start the ring is posted full:** `mlx5_rxq_initialize` puts a buffer in every WQE and writes `rq_db = wqe_n` (`mlx5_rx.c:427-430`).
+- **`mlx5_rx_burst` refills in place, one for one** (`mlx5_rx.c:841`): for each received packet it takes the mbuf of slot `rq_ci & mask`, allocates a replacement from the same pool (`rte_mbuf_raw_alloc`, line 869), writes the replacement's address into *the same* WQE (line 924), and at the end of the burst writes `rq_db = rq_ci` (line 956).
+- **So one variable does two jobs.** `rq_ci` is both the read position (the slot the next completion belongs to) and the count of posted WQEs, and the two differ by exactly the ring size, forever. That identity — *posted = consumed + ring size* — is the "dual role of the Rx ring" in this driver, and it is why ring size, burst capacity and I/O working set are one number under privRing.
+- **The driver already runs the RQ less than full elsewhere.** The vectorized path keeps separate counters — `rq_pi` consumed, `rq_ci` posted — and replenishes lazily in bulk at the producer position (`mlx5_rx_replenish_bulk_mbuf`, `mlx5_rxtx_vec.c:87`), only once ≥ 64 slots are empty. So the NIC accepts fewer posted WQEs than the ring holds; what is unproven is a *large, permanent* gap (128 posted in a ring of 1024).
+- **The UMEM is already shared.** l3fwd creates one mempool per (port, socket) (`examples/l3fwd/main.c:902-907`) and passes it to every Rx queue, with a 256-mbuf per-lcore cache. Nothing needs to change to share buffers; only how many each queue keeps *posted*.
+- **New datapaths are added beside the old ones.** shRing gates its own burst functions behind `rmp_en` in `mlx5_select_rx_function` (`mlx5_ethdev.c:592-615`) and leaves `mlx5_rx_burst` untouched. Ours goes in the same way, so one binary still yields every system.
+
+&nbsp;
+
+### 18.2 The design
+
+- **Separate the two jobs of `rq_ci`.** Keep a read index (slots consumed) and a post index (WQEs posted), with `posted − consumed = budget ≤ ring size`. On receive, take the mbuf at the read index and post a fresh one at the *post* index — `budget` slots ahead — instead of into the slot just emptied. The ring stays large (room to grow); the working set is `budget` buffers.
+- **Mapping to AF_XDP (§5):** the post index is the FILL ring's producer, the read index the RX ring's consumer, the mempool the UMEM, and **a credit is one posted buffer**.
+- **Devargs**, next to shRing's: `fill_en=1,fill_budget=<n>` (names provisional). `fill_en=0` must leave privRing and shRing bit-for-bit as they are.
+- **Phase 1 (static budget, any number of queues)** is done when a ring of 1024 with budget 128 forwards without loss and **measures like privRing-128** on the three tests we already have: DRAM write (§17.6: ~0.6–1 GB/s, not privRing-1024's 10 GB/s), hot queue (§17.8), stalled core (§17.11: loss only on the stalled queue, `rate × stall − budget`). Same numbers as privRing-128 is the *success* criterion here — it proves the budget, not the ring size, sets the working set.
+- **Phase 3 then makes the budget move:** a queue that runs low borrows credits from a global pool and posts further ahead; an idle one gives them back. No shared in-sequence head (§17.8), so a stalled core can at worst sit on the credits it holds. That policy is the contribution and is not designed yet.
+
+&nbsp;
+
+### 18.3 Risks to retire first
+
+1. **Does the NIC run with a permanent large gap?** Retired by the first Phase 1 run itself: budget 128 in a ring of 1024 at line rate.
+2. **Initialization.** `mlx5_rxq_initialize` and the elts allocation assume a full ring (`rxq_alloc_elts_sprq`, `mlx5_rxq.c`); with a budget only the first `budget` slots are posted, and stop/free paths (`rxq_free_elts_sprq`) must free only slots that hold an mbuf.
+3. **Error recovery** (`mlx5_rx_err_handle`, `mlx5_rx.c:~500`) re-posts the whole ring; it must restore `budget`, not `wqe_n`.
+4. **Scatter (`sges_n`) and CQE compression** are off in our configuration (§15); the first version asserts that rather than supporting them.
 
 &nbsp;
 
