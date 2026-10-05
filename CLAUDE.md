@@ -89,7 +89,8 @@ The key restructuring: in stock DPDK the Rx ring plays a **dual role** — it bo
 
 ## 7\. Repositories and how to use them
 
-- **shRing on DPDK (primary base):** [https://github.com/BorisPis/shRing-dpdk.git](https://github.com/BorisPis/shRing-dpdk.git) Use this as the starting point to understand the changes we need to make.  
+- **Our fork of shRing-dpdk (the working tree):** [https://github.com/Pirol4/shRing-dpdk.git](https://github.com/Pirol4/shRing-dpdk.git), branch **`fill-ring`**, built on shRing's `c191506e3`. The implementation (§18) is written here; `git diff v21.05-rmp..fill-ring` is exactly what this project adds. Its first commit is the thin-archive build fix of §14.1, so the tree builds as cloned. `setup/dev-environment.sh` clones this branch on the nodes and refuses a tree that does not contain the pinned shRing commit. BSD-3-Clause like DPDK: keep the existing copyright lines, add ours to new files.  
+- **shRing on DPDK (upstream of the fork, remote `upstream`):** [https://github.com/BorisPis/shRing-dpdk.git](https://github.com/BorisPis/shRing-dpdk.git) The published artifact and the source of both baselines.  
 - **Vanilla DPDK (reference):** [https://github.com/DPDK/dpdk.git](https://github.com/DPDK/dpdk.git) **Diff shRing against vanilla DPDK** to see exactly what Pismenny changed and where the Rx-ring/mempool machinery lives.  
 - **AF\_XDP reference (concept only):** [https://docs.ebpf.io/linux/concepts/af\_xdp/](https://docs.ebpf.io/linux/concepts/af_xdp/)
 

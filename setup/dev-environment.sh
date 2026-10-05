@@ -48,6 +48,15 @@ HUGEPAGE_COUNT=4096   # 4096 x 2MB = 8GB
 VANILLA_REF=175af25734f295874e31b33ccd0879e69fd152a9   # tag v21.05 (2021-05-21)
 SHRING_REF=c191506e337506ac4238dd2c602aa49b66720989    # branch v21.05-rmp
 
+# The working tree is our fork of shRing-dpdk, on the branch that carries the
+# implementation (CLAUDE.md section 18). It is a branch, not a pinned commit,
+# because it is the code under development; what stays pinned is its base:
+# SHRING_REF must be an ancestor, so the privRing and shRing baselines this
+# binary yields are still the published artifact plus our commits on top.
+SHRING_FORK_URL=https://github.com/Pirol4/shRing-dpdk.git
+SHRING_UPSTREAM_URL=https://github.com/BorisPis/shRing-dpdk.git
+SHRING_BRANCH=fill-ring
+
 # The shRing tree is the primary working tree, not an optional extra: its mlx5
 # changes are all gated behind the `rmp_en` devarg, so one binary yields both
 # baselines — `rmp_en=0` is privRing and `rmp_en=1,rqs_per_rmp=N` is shRing. That
@@ -149,6 +158,25 @@ clone_at_ref() {
     fi
 }
 
+# Clones the fork on its working branch on first run; later runs only report.
+# Either way it refuses a tree that is not built on the pinned shRing commit.
+clone_work_branch() {
+    local url="$1" dir="$2" branch="$3" base="$4" upstream="$5" label="$6"
+    if [[ ! -d "$dir/.git" ]]; then
+        log "Cloning $label into $dir (branch $branch)"
+        git clone --branch "$branch" "$url" "$dir"
+        ( cd "$dir" && git remote add upstream "$upstream" )
+    else
+        log "$label already cloned; leaving its checkout alone (it may hold your work)"
+    fi
+    if ! ( cd "$dir" && git merge-base --is-ancestor "$base" HEAD ); then
+        echo "ERROR: $dir is not built on the pinned shRing commit $base." >&2
+        echo "       Its baselines would not be the published artifact." >&2
+        exit 1
+    fi
+    log "$label at $(cd "$dir" && git rev-parse --abbrev-ref HEAD) $(cd "$dir" && git rev-parse --short HEAD), on top of shRing $(echo "$base" | cut -c1-9)"
+}
+
 # DPDK 21.05 predates the toolchain on the node, so it needs a small number of
 # build fixes. They live as patch files rather than being edited in place, so
 # that every deviation from the pinned upstream commit is auditable -- which
@@ -176,8 +204,8 @@ apply_patches() {
     shopt -u nullglob
 }
 
-clone_at_ref "https://github.com/BorisPis/shRing-dpdk.git" "$SHRING_DIR" \
-             "$SHRING_REF" "shRing-dpdk (primary tree)"
+clone_work_branch "$SHRING_FORK_URL" "$SHRING_DIR" "$SHRING_BRANCH" \
+                  "$SHRING_REF" "$SHRING_UPSTREAM_URL" "shRing-dpdk fork (primary tree)"
 clone_at_ref "https://github.com/DPDK/dpdk.git" "$VANILLA_DIR" \
              "$VANILLA_REF" "vanilla DPDK v21.05 (reference only)"
 
