@@ -1206,3 +1206,20 @@ IRQ 9 on CPU 0, hot queue 56%, 98%, 30 s:
 - **Steady state is not zero, but it is small:** 71 packets in 482 M under balanced load (0.15 ppm), a handful under the hot queue. The shrink fix halved queue 5's loss per minute (178–282 before) without removing it.
 - **What is left is the lean policy itself:** a queue comes down after one to two windows (10–20 s) without a large backlog, and the next large one finds it small. Queue 5's pauses (≥ 64 packets at times, cause still open) and queue 0's ordinary bursts under hot load (peak 74 against a mean budget of 75) both do that. Longer memory or more headroom trade this loss for buffers; that trade-off curve — loss against DRAM write over window, headroom and floor — is a result to measure, not a constant to guess.
 - **The comparison as it stands, with clean cores:** static 128 and shRing lose 0 where dyn-128 loses tens of packets per minute; dyn-128 writes ~10–50 MB/s where they write 232 (shRing) and 600–700 (static 128).
+
+&nbsp;
+
+### 19.16 Stalling the hot queue's core on purpose: the test that separates the systems (2026-10-13)
+
+Hot queue 56% (queue 0, 4.52 packets/µs), `stall_core.py --core 1 --stall-us 1000 --period-ms 100` (mean 1,001 µs, 1.00% of the CPU), 98%, 30 s, interrupts off the lcores, one run each. About 4,526 packets arrive for queue 0 during a stall, more than any system has posted, so the stalled queue loses in all three; the question is the other seven. Per-queue loss is the shortfall against the counts the fill-128 and dyn-128 runs agree on. Tx equals Rx in all three.
+
+| system | total loss | queue 0 (stalled, hot) | each cold queue | model |
+|---|---|---|---|---|
+| fill-128 | 1,325,368 | 1,325,368 | **0** | (4,526 − 128) × 300 = 1.320 M |
+| **dyn-128** (`ae3e52b94`) | **1,136,545** | 1,136,531, budget 800 at most | **0** (queue 5: 14) | (4,526 − 800) × 300 = 1.118 M |
+| shRing-8 | 2,138,085 | 1,202,827 | **133,370 – 133,879**, 0.89% of its traffic | (1,001 − 127) × 8.038 × 300 = 2.107 M; 131.7 k per cold queue |
+
+- **shRing spreads one core's stall over every queue; the FILL path does not, with or without credits.** Seven queues that did nothing wrong lose 133 k packets each under shRing and none under fill-128 or dyn-128. This is the head-of-line blocking of §17.9 under an imbalanced load, the regime §3 is about, and unlike the old hot-queue test it does not depend on an accidental interrupt.
+- **Credits give the stalled queue 14% back** (1.14 M against 1.32 M): it took the whole pool, 800 buffers. It cannot do better than the ring: 4,526 packets do not fit in 1,024.
+- **Reclaim worked under it:** queue 5 was refused three times with the pool empty, asked, and reached 64; queue 0 came down from 800 to 768. Queue 5 lost 14 packets.
+- **All three models are within 2%.** Releasing 800 packets at once on a queue that already carries half the wire did not overflow the Tx ring.
