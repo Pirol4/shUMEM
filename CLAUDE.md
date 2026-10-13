@@ -1191,3 +1191,18 @@ IRQ 9 on CPU 0, hot queue 56%, 98%, 30 s:
 - **Queue 5 still pauses with the interrupts gone**, with the same signature as before (§19.12): so the control NIC's interrupts were not it, or not all of it. Cause open. Not to be traced during a measured run (§19.13).
 - **Its loss is partly the policy's own doing.** A backlog that fills the budget was remembered as the budget, so the window's end set the target to 1.5 × a budget that had just failed: 32 → 64, back to 48, → 96, back to 72… and a loss at each step. Fixed in fork `ae3e52b94`: a saturated backlog is remembered as one that calls for the doubled budget, so the queue only comes down after windows with no saturation. Not yet run.
 - **With clean cores a static 128 loses nothing in either test, and dyn-128 loses 52–178**: the queues that need more than the floor find out by losing. That is the price of starting lean; the steady state is what a second traffic window in the same l3fwd run will show.
+
+&nbsp;
+
+### 19.15 Two windows in a row: start-up against steady state (2026-10-13, fork `ae3e52b94`, interrupts off the lcores)
+
+`rate_sweep.py --rates 98,98`: two traffic windows in one l3fwd run, so the second starts with budgets already sized. `dyn-128`, loss per window from TRex, total from the dut.
+
+| run | window 1 | window 2 | dut total | DRAM write | what moved |
+|---|---|---|---|---|---|
+| balanced, 2 × 60 s | 109 | **71** | 180 | ~16 MB/s under load (max 83) | queue 5 only: mean 78, max 129, 8 grows, 3 shrinks |
+| hot queue, 2 × 30 s | 6 | **~0** (−11: TRex's stray unicast) | 20 | – | queue 0: mean 75, max 111, peak backlog 74; queue 5 up to 64 |
+
+- **Steady state is not zero, but it is small:** 71 packets in 482 M under balanced load (0.15 ppm), a handful under the hot queue. The shrink fix halved queue 5's loss per minute (178–282 before) without removing it.
+- **What is left is the lean policy itself:** a queue comes down after one to two windows (10–20 s) without a large backlog, and the next large one finds it small. Queue 5's pauses (≥ 64 packets at times, cause still open) and queue 0's ordinary bursts under hot load (peak 74 against a mean budget of 75) both do that. Longer memory or more headroom trade this loss for buffers; that trade-off curve — loss against DRAM write over window, headroom and floor — is a result to measure, not a constant to guess.
+- **The comparison as it stands, with clean cores:** static 128 and shRing lose 0 where dyn-128 loses tens of packets per minute; dyn-128 writes ~10–50 MB/s where they write 232 (shRing) and 600–700 (static 128).
