@@ -1257,3 +1257,23 @@ Everything at 98% of line rate, 1500 B, 8 queues, ring 1,024, 1,024 credits. Ran
 5. **Cost of the path:** cycles per packet against privRing and shRing (l3fwd prints `rx_cyc`), and the Rx burst with `fill_dyn=0` against Phase 1's.
 6. **Carried over:** why the FILL path builds a Tx backlog at exactly 100% (§18.7); the error-recovery path, never exercised; `-12` for `-22` (§18.7).
 7. `node-setup.sh`'s interrupt routing has run by hand only; check its message on the next boot.
+
+&nbsp;
+
+### 19.18 Repetitions: the stall rows are tight, the balanced rows are not (2026-10-13, fork `ae3e52b94`, interrupts off the lcores)
+
+Two more runs of each of the three tests, dyn-128 and shRing-8 alternating, into `reps.csv`. With the earlier run of each that makes three per cell (shRing's first cold-stall run predates the interrupt routing; a stall of 1 ms does not care).
+
+| test (98%) | dyn-128, three runs | shRing-8, three runs | ratio of means |
+|---|---|---|---|
+| cold core stalled, 30 s: loss | 73,970 / 74,857 / 76,845 — mean **75,224**, spread 3.8% | 2,131,633 / 2,129,617 / 2,127,617 — mean **2,129,622**, spread 0.2% | **28×** |
+| …loss outside the stalled queue | 0 on six queues; queue 5 tens of packets | ~266 k on every queue | |
+| hot core stalled, 30 s: loss | 1,136,545 / 1,133,721 / 1,134,734 — mean **1,135,000**, spread 0.2% | 2,138,085 / 2,138,217 / 2,138,727 — mean **2,138,343**, spread 0.03% | 1.9× |
+| …loss on each cold queue | **0** (queue 1 complete in all three) | **133.4–133.9 k** | |
+| balanced, 60 s: loss | 78 / 177, and 109 / 71 in the two-window run | 94 / 113 / 75 | — |
+| balanced: DRAM write under load | ~16 / ~21 / ~111 MB/s | 117 / 153 / 300 MB/s | 2.7–7× in runs taken back to back |
+
+- **The stall results are reproducible to a fraction of a percent** for shRing and a few percent for dyn-128, whose spread is how fast the stalled queue reaches its 800 buffers. These two rows can be quoted.
+- **Balanced loss is a tie.** With the interrupts off the lcores shRing loses 75–113 packets a minute and dyn-128 71–177; the 0 that shRing showed earlier in the day (§18.10) did not come back in three runs. Whatever pauses lcore 6 hurts both.
+- **Balanced DRAM write moves a lot between runs, for both systems, and together:** the third pair (111 and 300 MB/s) is two to five times the second (21 and 153), taken minutes apart. The order holds in every back-to-back pair, but the ratio is 2.7–7×, not the 20× of the best pair. It needs more runs and a look at what else changes on the node between them (PCM itself samples once a second on core 0).
+- **For the summary of §19.17:** read "11–49 MB/s" as 11–111, and "0–94" for shRing's balanced loss as 0–113.
