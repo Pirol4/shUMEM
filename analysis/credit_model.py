@@ -20,6 +20,12 @@ Policy (one lottery per chunk of credits, equal tickets):
 `broadcast` replaces the draw by an equal share of the ask on every other
 queue; `static` never moves a credit (Phase 1, fill-128).
 
+`lean` has no debts and no draw: every queue holds max(FLOOR, ALPHA * peak),
+gives the rest to the pool by itself at the end of each window, and a queue
+that is short takes from the pool, first come first served. Credits in the
+pool are not posted, so the posted total follows the load instead of staying
+at CREDITS.
+
 Rates are the measured ones at 98% of line rate. The pause on lcore 1 is
 inferred, not observed: see CALIBRATION.
 
@@ -90,6 +96,12 @@ class Model:
         self.events = []                # (time, sequence, kind, queue, value)
         self.sequence = 0
         self.max_budget = [ENTITLEMENT] * N_QUEUES
+        if policy == "lean":
+            for i in range(N_QUEUES):
+                t = WINDOW_US
+                while t < DURATION_US:
+                    self.push(t, "window", i, 0)
+                    t += WINDOW_US
         for queue, period, length in pauses:
             t = self.rng.uniform(0, period)
             while t + length < DURATION_US:
@@ -117,6 +129,12 @@ class Model:
                 if self.policy != "static":
                     self.pay(now, i)
                     self.ask(now, i, saturated=arrived >= q.pause_budget)
+            elif kind == "window":
+                # No pause in a whole window still moves the peak along.
+                q.observe(now, 0.0)
+                if not q.paused:
+                    q.debt = q.budget
+                    self.pay(now, i)
             elif kind == "paid":
                 self.pool += value
                 for j in self.rng.sample(range(N_QUEUES), N_QUEUES):
@@ -137,6 +155,8 @@ class Model:
         q.want = max(0, min(want, RING - q.budget))
         self.take(i)
         others = [j for j in range(N_QUEUES) if j != i]
+        if self.policy == "lean":
+            return
         if self.policy == "broadcast":
             shares = {j: math.ceil(q.want / len(others)) for j in others}
         else:
@@ -185,14 +205,15 @@ def main():
     print(f"{'scenario':<15} {'policy':<10} {'loss mean':>10} {'min':>9} {'max':>9}"
           f"  loss per queue (k) / final budgets")
     for name in SCENARIOS:
-        for policy in ("static", "lottery", "broadcast"):
+        for policy in ("static", "lottery", "broadcast", "lean"):
             mean, low, high, per_queue, budgets = summarize(policy, name, args.seeds)
             measured = MEASURED_STATIC.get(name) if policy == "static" else None
             note = f"  (measured {measured:,})" if measured is not None else ""
             print(f"{name:<15} {policy:<10} {mean:>10,.0f} {low:>9,.0f} {high:>9,.0f}"
                   f"  {' '.join(f'{x / 1e3:.1f}' for x in per_queue)}{note}")
             if policy != "static":
-                print(f"{'':<46}  budgets {' '.join(f'{b:.0f}' for b in budgets)}")
+                print(f"{'':<46}  budgets {' '.join(f'{b:.0f}' for b in budgets)}"
+                      f"  = {sum(budgets):.0f} posted")
         print()
 
 

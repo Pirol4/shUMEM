@@ -951,7 +951,7 @@ The advisor's suggestion: base the credit policy on lottery scheduling — Walds
 
 1. **A credit cannot be taken, only given.** A posted WQE cannot be un-posted and only the queue's own lcore writes its ring. A loser gives a credit up by *not re-posting* after it reads a packet. So revocation is a **debt** the loser pays at its own pace, and a queue that receives nothing, or whose core is stalled, does not pay.
 2. **A queue learns it is short only after the fact.** The signal is the backlog found at a poll: completions waiting = posted buffers already used. Backlog near the budget means the NIC was close to (or at) dropping.
-3. **Unused posted buffers cost nothing.** A buffer the NIC never fills is never touched. So there is no reason to take credits from a queue until another queue needs them: **all `C` credits stay distributed and move on demand**, as pages do in the paper. Under balanced load nothing moves and the system *is* fill-128 (§18.7).
+3. **(Wrong as stated — corrected in §19.7.)** **Unused posted buffers cost nothing.** A buffer the NIC never fills is never touched. So there is no reason to take credits from a queue until another queue needs them: **all `C` credits stay distributed and move on demand**, as pages do in the paper. Under balanced load nothing moves and the system *is* fill-128 (§18.7).
 
 &nbsp;
 
@@ -1016,3 +1016,39 @@ Model results, 30 s at 98%, 20 seeds, total credits 1,024, floor 64, `ALPHA` 1.5
 - **Not in the model:** rare pauses on the other lcores (the 137 µs one of §18.7 would cost a lender at 64 some 70 packets), the Tx ring (§18.8), and the cost of measuring the backlog.
 
 Next: step 2, the driver. To settle while writing it: how to count the completions waiting (ownership bit of a CQE ahead of `cq_ci`), and counters that show each queue's budget over a run.
+
+
+&nbsp;
+
+### 19.7 Lean budgets: the configuration aimed at shRing (2026-10-13, recommended over §19.3's debts)
+
+**Correction to §19.2 point 3.** A posted buffer is untouched only on a queue with *no traffic*. On a queue with traffic the NIC fills WQEs in ring order, so every posted buffer is used in turn: a queue cycles through its whole budget however small its backlog is, and budget above need is working set for nothing. The data already said so — under the same balanced load privRing-64 writes less DRAM than privRing-128 (319 vs 764 MB/s mean, §17.6). So leaving all 1,024 credits posted when nobody needs them (§19.3) gives away exactly the metric where shRing leads.
+
+**Lean policy.** Every queue holds `max(floor, ALPHA × peak)` and no more: what it does not need it un-posts by itself, at the end of a window, into the pool; a queue that is short takes from the pool. `C` = 1,024 becomes a **cap** on the posted total, not the posted total. No debts, no cross-queue requests, one shared atomic counter — simpler than §19.3. The inverse lottery is kept for the one case that needs an arbiter: the pool is empty and two queues want more.
+
+Model, same scenarios as §19.6 (`lean` in `analysis/credit_model.py`):
+
+| scenario | static (fill-128) | debts + lottery (§19.6) | **lean** | posted total, lean |
+|---|---|---|---|---|
+| balanced | 0 | 0 | 0 | **565** (q0 117, the others 64) against 1,024 |
+| hot queue 56% | 13,090 | 317 | 533 | 971 |
+| 1 ms stall on lcore 4 | 262,702 | 139,116 | 148,430, q3 only | 1,024 |
+| hot queue, its own core stalled | 1,332,600 | 1,185,934 | 1,190,389, q0 only | 1,024 |
+| hot queue + a cold core stalled | 125,535 | 19,346 (q0 starved) | 47,244 (q0 269, q3 371) | 1,024 |
+
+Loss is the same order as with debts (the hot queue pays one more pause to grow from where it started); what changes is the first row: about half the buffers posted under balanced load.
+
+**Where this can and cannot beat the two systems — to be claimed only as measured:**
+
+| | shRing-8 (measured, §18.10) | lean credits (model / expectation) | rxBisect (paper; not runnable, §11) |
+|---|---|---|---|
+| balanced: DRAM write | 232 MB/s | **unknown** — 565 buffers posted instead of 1,024; privRing-64's 111–577 MB/s is the nearest measurement | small working set, as shRing |
+| hot queue: loss | 0 | ~300–500 in 30 s, all while the queue grows | ~0 |
+| stalled core: loss | 2.13 M on every queue | ~140–150 k on the stalled queue only (**~15× less**) | the NIC takes other cores' buffers for the stalled queue: expected near 0 up to the ring size |
+| a stalled core hurts others | yes | no | no |
+| shared state on the fast path | bitmap and head, CAS per burst | none | none (NIC side) |
+| needs | RMP support | **a stock NIC** | an ASIC change, or an emulator on a dedicated core |
+
+- **Against shRing** the case is: equal where it is good (hot queue, working set) and an order of magnitude better where it is bad (one slow core). The balanced DRAM row is the one not yet in hand.
+- **Against rxBisect** the honest claim is *the same isolation property on hardware that exists*, not better numbers: software cannot hand a buffer to a queue whose core is not running, so a first stall costs what the queue had posted (§18.4). rxBisect cannot be measured here at all.
+- **What decides the floor, and so the balanced row:** a budget sweep on the NIC — `fill-16`, `fill-32`, `fill-64`, `fill-96` beside `fill-128`, balanced, 98%, 60 s, DRAM write and loss per queue. The harness already runs it. The floor is the smallest budget that loses nothing on the seven quiet lcores; the sweep also says whether DRAM write keeps falling below 128 or flattens.
