@@ -178,6 +178,8 @@ Each phase has an explicit **Done when** so we know it is complete.
   &nbsp;  
 - **Phase 2 — Multiple FILL/RX pairs, static partitioning.** N cores, N pairs, all sharing one UMEM with a fixed per-core partition. *Done when:* multi-core forwarding is correct and the combined working set is measurably smaller than vanilla per-core rings.  
   &nbsp;  
+  **Status (2026-10-13): Phases 1 and 2 done.** The FILL-ring path (fork branch `fill-ring`, `fill_en=1,fill_budget=<n>`) runs on the NIC with 8 queues over one mempool; ring 1024 with budget 128 measures like privRing-128 on DRAM write, a stalled core and a hot queue (§18.7–18.9). Compare systems at 98% of line rate, not 100% (§18.7).
+  &nbsp;
 - **Phase 3 — Dynamic allocation (the novelty).** Add the credit/allocation pool so cores take more/less UMEM dynamically and rebalance under imbalanced load. *Done when:* under a deliberately imbalanced load, the allocator shifts capacity and avoids the shRing-style bottleneck.  
   &nbsp;  
 - **Phase 4 — Evaluation.** Compare **vanilla DPDK, shRing, rxBisect, and our implementation** with the same `l3fwd` workload, under balanced and imbalanced load. *Done when:* we have a fair, repeatable comparison table \+ plots across all four, on the same node and traffic.
@@ -888,4 +890,16 @@ Fresh instantiation, fork `b46c129b8`, dut port `51:00.0` (MAC `b8:3f:d2:13:08:e
 - **The ring of 1024 does not help the FILL path here, by design:** with a static budget a stalled queue is bounded by what it had posted. That is the "like privRing with that ring size" of §18.4, and the room Phase 3's credits are meant to use.
 - **privRing-1024 loses on Tx, not Rx.** Its l3fwd log also covers an aborted ~2 s start with a wrong label, so its counters are lifetime totals: 199 `rx_missed_errors` plus **713 packets received and never sent, all on queue 3** (`rx_q3` 31,975,263, `tx_q3` 31,974,550) = 912, against TRex's 882 for the 30 s window. The ring absorbs the stall (~1,003 packets in 1,024 slots), then the lcore hands ~1,000 packets to a 1,024-entry Tx ring on a wire with 2% of slack and l3fwd drops what does not fit. ~300× less loss than the 128-buffer systems, at 16× their DRAM write. **For Phase 3:** a queue that is lent more buffers absorbs a longer stall on Rx only to release it as a Tx burst; where the Tx ring is the next limit has to be measured, not assumed.
 
-**Still to do for Phase 1 (§18.6 test 4):** one hot queue, at 98%, with privRing-128 and privRing-1024 beside it.
+### 18.9 One hot queue: the static budget loses like privRing-128, and Phase 1 is done (2026-10-13)
+
+`--hot-share 0.5`, **98%** of line rate, 30 s, one run each. Queue 0 gets 135,655,342 of 241,141,744 packets (56.3%). In all three runs `tx_good_packets` equals `rx_good_packets`, and the loss is exactly what queue 0 is short of that count.
+
+| system | ring / posted | `rx_missed_errors` | loss (TRex) | DRAM write | DRAM read | lat avg/max (hot queue) |
+|---|---|---|---|---|---|---|
+| privRing-128 | 128 / 128 | 13,022 | 13,009 | 322 MB/s | 45 MB/s | 24 / 77 µs |
+| **fill-128** | **1024 / 128** | **13,097** | 13,083 | 476 MB/s | 48 MB/s | 22 / 93 µs |
+| privRing-1024 | 1024 / 1024 | 0 | −12 | 5,915 MB/s | 429 MB/s | 21 / 95 µs |
+
+- **Third Phase 1 criterion holds:** 13,097 against 13,022, all on the hot queue; DRAM write in the "almost nothing leaks" region for both (§17.6: values under ~1 GB/s are not precise), 12–18× below privRing-1024. TRex is ~13 packets off the dut's count in each run, the known stray unicast of §17.8.
+- **Phase 1 is done, and Phase 2 with it** (the code never was single-queue): with a static budget of 128 in a ring of 1024, eight queues over one mempool measure like privRing-128 on DRAM write (§18.7), a stalled core (§18.8) and a hot queue (this table), at 98% of line rate. The budget, not the ring, is the working set.
+- **This table is the case Phase 3 has to win.** The hot queue loses 13 k because it may post only 128 buffers while seven queues at 6% of the load sit on 128 each and 896 slots of its own ring stay empty. shRing lost 170 here (§17.7, at 100%) by lending it the idle queues' buffers; privRing-1024 loses nothing at 12× the DRAM write. Target: the hot queue's loss near zero with the total posted still ~1,024, **and** the stalled-core row of §18.8 unchanged (loss on the stalled queue only).
