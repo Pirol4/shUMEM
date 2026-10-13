@@ -52,4 +52,16 @@ else
     echo "node-setup: WARNING no interface in ${EXPERIMENT_SUBNET_PREFIX}0/24; pause frames left as they are" >&2
 fi
 
+# --- ACPI interrupt off the forwarding cores --------------------------------
+# The ACPI SCI fires twice a second and arrived on CPU 1, the lcore serving
+# queue 0: two ~77 us pauses a second there, which is all the loss the hot
+# queue test showed until it was found (CLAUDE.md 19.9, 19.12). CPU 0 is left
+# to the OS by every run (lcores are 1-8).
+acpi_irq=$(awk '$NF == "acpi" {sub(":", "", $1); print $1}' /proc/interrupts | head -1)
+if [ -n "$acpi_irq" ] && echo 0 | sudo tee "/proc/irq/$acpi_irq/smp_affinity_list" >/dev/null 2>&1; then
+    echo "node-setup: ACPI IRQ $acpi_irq routed to CPU 0"
+else
+    echo "node-setup: WARNING could not route the ACPI IRQ to CPU 0" >&2
+fi
+
 echo "node-setup: complete ($allocated x 2 MiB hugepages, $HUGEPAGE_MOUNT mounted)"

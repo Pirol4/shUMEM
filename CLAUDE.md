@@ -1138,3 +1138,24 @@ Same stall test (1 ms every 100 ms on lcore 4, balanced, 98%, 30 s), `dyn-128`:
 The hot-queue run of §19.10 (pool-only build), from its `FILL credits` lines: queue 0 at 531 (mean 359, max 544, peak backlog 363 — the model said 523), queue 5 up to 64, the rest at 32, 224 credits never used.
 
 **Where Phase 3 stands.** One build, `dyn-128`, at 98% of line rate against shRing-8: 10–20× less DRAM write under balanced load, about half under a hot queue, 21× less loss with a stalled core and none of it on other queues; it loses a few hundred packets where shRing loses none (282 balanced, 747 hot queue), all while queues grow from the floor. Balanced and hot-queue runs have not been repeated on the reclaim build, nothing has been repeated at all, and every row still has IRQ 9 on lcore 1 (§19.9).
+
+&nbsp;
+
+### 19.12 The whole table on the reclaim build, and IRQ 9 moved (2026-10-13, fork `155a4b111`)
+
+Repeats of the balanced and hot-queue runs on the final build, then the balanced run again after `echo 0 > /proc/irq/9/smp_affinity_list`.
+
+| run (98%) | loss | DRAM write | queue 0 | queue 5 | the other six |
+|---|---|---|---|---|---|
+| balanced, 60 s (first build, §19.10) | 282 | ~11 MB/s under load (max 21) | 121, peak backlog 89 | up to 96, peak 48 | 32 |
+| balanced, 60 s | 282 | ~49 MB/s under load (max 80) | mean 112, max 147, peak backlog 98 | mean 55, max 96 | 32 |
+| hot queue, 30 s | 704 (747 before) | 456 MB/s (427 before) | 531, mean 377, peak backlog 363 | up to 64 | 32 |
+| **balanced, 60 s, IRQ 9 on CPU 0** | **173** | ~34 MB/s under load (max 105) | **32, peak backlog 13, never grew** | mean 48, max 96 | 32 |
+
+("Under load" removes the idle samples from the whole-file means of 9.4, 36.2 and 29.6 MB/s, taking idle as 2 MB/s and 61 loaded samples.)
+
+- **The reclaim build changes nothing when nobody is short:** no refusals, no reclaims, the same 282 packets, the hot queue within 6% of the first run.
+- **Balanced DRAM write is tens of MB/s, not a fixed number:** 11, 49 and 34 MB/s in three runs — 5 to 20 times under shRing's 232, with single samples up to 105.
+- **Moving IRQ 9 removes lcore 1's pause, as §19.9 said it would.** Queue 0's peak backlog falls from 89–98 to 13 and it stays at the floor; what loss remains (173) is queue 5's. `setup/node-setup.sh` now routes the ACPI IRQ to CPU 0 at every boot.
+- **Consequence: the hot-queue rows of §17.7, §18.9, §18.10 and above measure that interrupt.** They have to be re-measured with IRQ 9 away, where a hot queue on a core that keeps up should cost the 128-buffer systems nothing, and replaced by pauses injected on purpose (`stall_core.py` on the hot queue's lcore).
+- **Queue 5 is now the only loss under balanced load** (150–220 a minute). Its lcore pauses ~8 times a minute for 40–140 µs, cause not traced; a budget that follows 1.5 × the recent peak is caught by the longer ones. Trace CPU 6 as CPU 1 was traced before tuning the window or the headroom around it.
