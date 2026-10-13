@@ -182,6 +182,8 @@ Each phase has an explicit **Done when** so we know it is complete.
   &nbsp;
 - **Phase 3 — Dynamic allocation (the novelty).** Add the credit/allocation pool so cores take more/less UMEM dynamically and rebalance under imbalanced load. *Done when:* under a deliberately imbalanced load, the allocator shifts capacity and avoids the shRing-style bottleneck.  
   &nbsp;  
+  **Status (2026-10-13): mechanism and policy run on the NIC.** `fill_dyn=1` (fork `ae3e52b94`): per-queue budgets that follow the backlog, a per-port pool, entitlement reclaimed from borrowers by an inverse lottery (§19). The first full table against shRing and the static budget is §19.17; it is one to three runs per row, and its open items are listed there.
+  &nbsp;
 - **Phase 4 — Evaluation.** Compare **vanilla DPDK, shRing, rxBisect, and our implementation** with the same `l3fwd` workload, under balanced and imbalanced load. *Done when:* we have a fair, repeatable comparison table \+ plots across all four, on the same node and traffic.
 
 &nbsp;
@@ -1223,3 +1225,35 @@ Hot queue 56% (queue 0, 4.52 packets/µs), `stall_core.py --core 1 --stall-us 10
 - **Credits give the stalled queue 14% back** (1.14 M against 1.32 M): it took the whole pool, 800 buffers. It cannot do better than the ring: 4,526 packets do not fit in 1,024.
 - **Reclaim worked under it:** queue 5 was refused three times with the pool empty, asked, and reached 64; queue 0 came down from 800 to 768. Queue 5 lost 14 packets.
 - **All three models are within 2%.** Releasing 800 packets at once on a queue that already carries half the wire did not overflow the Tx ring.
+
+
+&nbsp;
+
+### 19.17 Where Phase 3 stands at the end of 2026-10-13
+
+Last three runs, interrupts off the lcores: shRing-8 balanced (DRAM write 117 MB/s, **94 lost**, `contention` 246,519), fill-128 balanced (756 MB/s, 0 lost), and dyn-128 (`ae3e52b94`) with lcore 4 stalled 1 ms every 100 ms (**73,970** lost: queue 3 ~73.9 k at a budget of 738–800, queue 5 40, queue 0 none; queue 5 refused 8 times, reclaimed 8 times, reached 94).
+
+Everything at 98% of line rate, 1500 B, 8 queues, ring 1,024, 1,024 credits. Ranges are the runs of today (one to three each); no row has been repeated enough to give an interval.
+
+| | fill-128 (static) | shRing-8 | **dyn-128** |
+|---|---|---|---|
+| balanced: DRAM write | 614–756 MB/s | 117–232 MB/s | **11–49 MB/s** |
+| balanced: loss per minute | 0–9 | 0–94 | 71–282 (71–109 once sized) |
+| hot queue 56%: DRAM write | 476 MB/s | 800 MB/s | 427–456 MB/s |
+| hot queue 56%, clean cores: loss in 30 s | 0 | not re-measured (0 with IRQ 9 on the hot lcore) | 6–52 at start, ~0 once sized |
+| cold core stalled: loss in 30 s | 263,916, stalled queue only | 2,131,633, every queue | **73,970–100,084**, stalled queue only |
+| hot core stalled: loss in 30 s | 1,325,368, stalled queue only | 2,138,085, **133 k on each cold queue** | **1,136,545**, stalled queue only |
+| shared state per burst | none | bitmap + head (CAS) | none |
+
+- **What can be claimed against shRing, on this evidence:** several times less DRAM write under balanced load (2.4× at the least favourable pair of runs, 21× at the most); a stalled core costs 21–29× fewer packets and none of them on other queues; under a stalled hot core the seven bystander queues lose nothing instead of 0.9% each. **What cannot:** lower loss under balanced load — both lose tens of packets a minute at most, shRing 0 in one run and 94 in another, dyn-128 71–282.
+- **Against rxBisect** nothing was measured (§11); the claim stays the one of §19.7 — its isolation property on a stock NIC, bounded by what a queue had posted when its core stopped.
+- **Against the static budget it grew from:** 15–60× less DRAM write, 2.6–3.6× less loss under a stalled cold core, for tens of packets a minute of its own.
+
+**Open, in the order they matter for the thesis:**
+1. **Repetitions.** Every number above is one to three runs. Three to five of each row, same build, interrupts routed by `node-setup.sh` from boot.
+2. **The loss–DRAM trade-off curve:** window (10 s now), headroom (1.5×), floor (32) are three guesses; sweep them and plot loss per minute against DRAM write, with shRing and the static budgets as points on the same axes.
+3. **Queue 5's pauses** (lcore 6, ≥ 64 packets a few times a minute, not an interrupt we could move): trace it between runs, never during one (§19.13).
+4. **Two queues both wanting more than their entitlement** are still served first come (§19.6); the lottery only arbitrates entitlement. Test: hot queue plus a stalled cold core.
+5. **Cost of the path:** cycles per packet against privRing and shRing (l3fwd prints `rx_cyc`), and the Rx burst with `fill_dyn=0` against Phase 1's.
+6. **Carried over:** why the FILL path builds a Tx backlog at exactly 100% (§18.7); the error-recovery path, never exercised; `-12` for `-22` (§18.7).
+7. `node-setup.sh`'s interrupt routing has run by hand only; check its message on the next boot.
