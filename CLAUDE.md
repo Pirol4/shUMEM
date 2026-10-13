@@ -925,7 +925,7 @@ Same instantiation, same binary, same three tests. Stall model for shRing at thi
 
 ---
 
-## 19\. Phase 3 design: credits moved by an inverse lottery (PROPOSAL, 2026-10-13 — not approved, nothing implemented)
+## 19\. Phase 3 design: credits moved by an inverse lottery (direction approved 2026-10-13; modelled in §19.6, no driver code yet)
 
 The advisor's suggestion: base the credit policy on lottery scheduling — Waldspurger & Weihl, *Lottery Scheduling: Flexible Proportional-Share Resource Management*, OSDI '94 (assumed to be the paper meant; confirm).
 
@@ -957,7 +957,7 @@ The advisor's suggestion: base the credit policy on lottery scheduling — Walds
 
 ### 19.3 The mechanism
 
-Per queue, written only by its lcore: `budget` (credits held; Phase 1's static `fill_budget` becomes its initial value and its entitlement). Shared, atomic, touched only on the slow path — never per packet, unlike shRing's head: per-queue `debt` (credits it has been asked to give) and one `pool` (credits given and not yet taken).
+**Where §19.6 changed this section, §19.6 wins.** Per queue, written only by its lcore: `budget` (credits held; Phase 1's static `fill_budget` becomes its initial value and its entitlement). Shared, atomic, touched only on the slow path — never per packet, unlike shRing's head: per-queue `debt` (credits it has been asked to give) and one `pool` (credits given and not yet taken).
 
 - **Pressure.** After a full burst, look at the completion `H` entries ahead (`H` = budget/2 to start): if it is already there, the backlog is ≥ `H` and the queue is short. One extra CQE read, only on full bursts. (To verify in the source: testing a CQE ahead of `cq_ci` is what `rx_queue_count` does.)
 - **Ask.** A queue under pressure first takes what is in `pool`. If that is not enough it draws a loser by inverse lottery among the other queues and adds `k` to that queue's `debt`. It asks for as much as it holds (doubling): being short costs packets, holding too much costs only cache.
@@ -987,4 +987,32 @@ Known limits, to state in the thesis: the first burst that finds a queue short i
 3. **Entitlement guarantee and reclaim.** Test: stall the hot queue's core; move the hot flow from one queue to another mid-run.
 4. **Unequal tickets** (optional): a devarg for per-queue weights; show the surplus divides in proportion.
 
-Open, for the advisor: (a) is on-demand revocation (this proposal, the paper's page example) what was meant, or a free pool that queues return to on their own? (b) are unequal tickets wanted as a result, or is equal-ticket fairness enough? (c) `C` fixed at 1,024, or also swept?
+**Decided with the user (2026-10-13): the simplest version that causes the fewest problems.** `C` stays fixed at 1,024 so every comparison keeps the same total; tickets are equal (step 4 dropped unless the advisor asks for it); revocation is on demand; and the entitlement guarantee of §19.3 (post at once, overcommit) is **deferred** — the floor is the guarantee: nobody lends below 64 or below what its own recent backlog justifies. Step 3 comes back only if a test shows a lender hurt by a stalled borrower.
+
+&nbsp;
+
+### 19.6 The model (`analysis/credit_model.py`) and what it changed
+
+An event model: constant arrival rates (the measured ones at 98%), and loss only while an lcore is paused — a pause of `d` µs lets `rate × d` packets into `budget` buffers. With nothing moving (`static`) it reproduces fill-128's measurements, which is the check that the model is worth reading: **0 / 13,090 / 262,702 against 0 / 13,097 / 263,916** measured (balanced / hot queue / stall).
+
+- **The hot-queue loss of this testbed is one periodic pause on lcore 1 (inferred, not observed).** Loss against ring size in §17.7 is a straight line, ~59.5 packets fewer per extra buffer in 30 s: ~2 pauses per second of ~77 µs on the hot queue's lcore. The same pause on that lcore *alone* gives balanced privRing-64's ~1,800 per minute (§17.6) — if every lcore had it, that would be 8× more. So the hot-queue test loses because the hot flow hashes to queue 0, which lcore 1 serves. To check on a node: what runs on CPU 1 twice a second (PCM is pinned to core 0), and a hot flow on another queue.
+- **The need signal is the peak backlog, not a fixed fraction of the budget.** With `H = budget/2` (§19.3) the 77-packet backlog of lcore 1 counts as pressure under balanced load and credits slosh for nothing. Instead a queue keeps the largest backlog of the last 1–2 s (`peak`) and wants `ALPHA × peak` (1.5): it asks when it holds less — doubling when the backlog filled the whole budget, since the real need is then unknown — and as a loser it pays only what it holds above `max(64, ALPHA × peak)`. Under balanced load nobody is short and nothing moves.
+- **One lottery per chunk of 32 credits**, not one per ask: an ask for 128 is four draws, so it spreads over several losers as the paper's one-unit lotteries do. A debt a loser cannot pay is dropped, not kept.
+
+Model results, 30 s at 98%, 20 seeds, total credits 1,024, floor 64, `ALPHA` 1.5:
+
+| scenario | static (fill-128) | lottery | where the credits end up |
+|---|---|---|---|
+| balanced | 0 | 0 | 128 each: nothing moves |
+| hot queue 56% | 13,090 | **317** (312–344) | q0 523, the others 66–74 |
+| 1 ms stall on lcore 4 | 262,702 | **139,116** (130–145 k), q3 only | q3 544, q0 96, the others 64 |
+| hot queue, its own core stalled | 1,332,600 | 1,185,934, **q0 only** | q0 576, the others 64 and losing nothing |
+| hot queue + a *cold* core stalled | 125,535 | 19,346 | q3 515, **q0 only 125** |
+
+- **Both targets of §18.10 at once, in the model:** the hot queue's loss falls 40× to shRing's order (its 317 is the two pauses it takes to grow 128 → 256 → 523), and a stall stays on the stalled queue, at half of fill-128's loss because the stalled queue borrows too.
+- **Insensitive to the two parameters:** `ALPHA` 1.25–2 and floor 32–64 leave the hot-queue row at 312–317 and the balanced row at 0; a floor of 32 lends more to a stalled queue (stall row ~80 k) at the price of leaner lenders.
+- **Equal tickets make the lottery equivalent to asking every other queue for an equal share** (`broadcast` in the model: 312 and 138,933). The draw earns its place only with unequal tickets or to disturb fewer queues per ask; it is kept because it is the advisor's direction and costs ten lines.
+- **Two borrowers are served first come, not in proportion.** In the last row the stalled queue asks five times as often as the hot one (every 100 ms against every 505 ms) and takes the whole surplus; the hot queue keeps losing its 13 k. Total loss still falls 6×, but this is where proportional shares between borrowers — the paper's actual subject — would matter, and the simplest version does not have them.
+- **Not in the model:** rare pauses on the other lcores (the 137 µs one of §18.7 would cost a lender at 64 some 70 packets), the Tx ring (§18.8), and the cost of measuring the backlog.
+
+Next: step 2, the driver. To settle while writing it: how to count the completions waiting (ownership bit of a CQE ahead of `cq_ci`), and counters that show each queue's budget over a run.
