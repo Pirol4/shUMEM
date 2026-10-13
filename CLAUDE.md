@@ -920,3 +920,71 @@ Same instantiation, same binary, same three tests. Stall model for shRing at thi
 - **shRing's two faces hold at 98%.** It lends the hot queue the idle queues' buffers (0 lost where the 128-buffer systems lose 13 k) and it is the leanest under balanced load, but one stalled core costs it **8.1× what it costs the FILL path** (2.13 M vs 0.26 M), spread over all eight queues (each ~29.87 M received against ~30.14 M unstalled), 1.2% above the model. `contention` 245,396 balanced in 60 s, 120,454 in the stall run.
 - **The hot-queue l3fwd log of shRing was not captured in the paste** (a ~5 s aborted start, `l3fwd_shring-8_20261013-143121.log`, took its place among the last three); loss is TRex's, and it is 0.
 - **What Phase 3 has to show, in this table's terms:** the hot-queue row of shRing (≈0) together with the stall row of fill-128 (loss on the stalled queue only, ~264 k), at a balanced DRAM write that stays under ~1 GB/s. No system here has both.
+
+&nbsp;
+
+---
+
+## 19\. Phase 3 design: credits moved by an inverse lottery (PROPOSAL, 2026-10-13 — not approved, nothing implemented)
+
+The advisor's suggestion: base the credit policy on lottery scheduling — Waldspurger & Weihl, *Lottery Scheduling: Flexible Proportional-Share Resource Management*, OSDI '94 (assumed to be the paper meant; confirm).
+
+&nbsp;
+
+### 19.1 What the paper gives us
+
+- **Tickets are rights, not the resource** (§2). A client holding `t` of `T` tickets is entitled to `t/T` of the resource under contention; what a client does not use is available to the others.
+- **Space-shared resources use an inverse lottery** (§6.2, the paper's example is physical pages): when a unit is needed and none is free, a *loser* is drawn to give one up, with probability `p = (1/(n−1)) · (1 − t/T)` for a client with `t` tickets among `n` clients. More tickets, less likely to lose. Posted buffers are exactly this kind of resource: held, not consumed in quanta.
+- **Not taken:** compensation tickets (§3.4) correct for a partly used time quantum, which has no analog for a held buffer; ticket transfers (§3.1) and inflation (§3.2) are for clients that block on each other; currencies (§3.3) would be one pool per port or NUMA node, which one port does not need.
+
+| lottery scheduling | here |
+|---|---|
+| resource unit | a **credit** = one posted buffer (§18.2) |
+| client | an Rx queue (its lcore) |
+| ticket | the queue's relative right to credits; equal by default |
+| entitlement | `e_i = C · t_i / T`, with `C` the total credits (= `n × fill_budget`, 1,024 today) |
+| inverse lottery | choosing which queue gives credits up when another runs short |
+
+&nbsp;
+
+### 19.2 What a commodity NIC changes
+
+1. **A credit cannot be taken, only given.** A posted WQE cannot be un-posted and only the queue's own lcore writes its ring. A loser gives a credit up by *not re-posting* after it reads a packet. So revocation is a **debt** the loser pays at its own pace, and a queue that receives nothing, or whose core is stalled, does not pay.
+2. **A queue learns it is short only after the fact.** The signal is the backlog found at a poll: completions waiting = posted buffers already used. Backlog near the budget means the NIC was close to (or at) dropping.
+3. **Unused posted buffers cost nothing.** A buffer the NIC never fills is never touched. So there is no reason to take credits from a queue until another queue needs them: **all `C` credits stay distributed and move on demand**, as pages do in the paper. Under balanced load nothing moves and the system *is* fill-128 (§18.7).
+
+&nbsp;
+
+### 19.3 The mechanism
+
+Per queue, written only by its lcore: `budget` (credits held; Phase 1's static `fill_budget` becomes its initial value and its entitlement). Shared, atomic, touched only on the slow path — never per packet, unlike shRing's head: per-queue `debt` (credits it has been asked to give) and one `pool` (credits given and not yet taken).
+
+- **Pressure.** After a full burst, look at the completion `H` entries ahead (`H` = budget/2 to start): if it is already there, the backlog is ≥ `H` and the queue is short. One extra CQE read, only on full bursts. (To verify in the source: testing a CQE ahead of `cq_ci` is what `rx_queue_count` does.)
+- **Ask.** A queue under pressure first takes what is in `pool`. If that is not enough it draws a loser by inverse lottery among the other queues and adds `k` to that queue's `debt`. It asks for as much as it holds (doubling): being short costs packets, holding too much costs only cache.
+- **Pay.** At each burst a queue with `debt` lowers its `budget` by what it can spare, skips that many re-posts, and moves the credits to `pool` once they are really un-posted. What it can spare: everything above its entitlement, always; below its entitlement, only what its own recent backlog shows it does not need, and never below a floor (64, the vendor minimum of §18.4).
+- **Guarantee.** A queue below its entitlement that is under pressure posts up to its entitlement **at once**, without waiting for the pool, and leaves the debt on the borrowers. Posted buffers then exceed `C` for a while, by at most what unresponsive borrowers hold. This is what keeps a stalled core from hurting anyone: it can sit on what it borrowed, never on what another queue is entitled to.
+- **Why a lottery and not "take from the largest holder":** the largest holder may be exactly the stalled core, which never pays. A random draw repeated while the pressure lasts reaches a queue that can pay with probability that grows with every draw; a deterministic rule can pick the dead one forever. With unequal tickets the same draw gives proportional shares of the surplus.
+
+&nbsp;
+
+### 19.4 What it should do on the §18.10 table (predictions to test)
+
+| test | expected | why |
+|---|---|---|
+| balanced | = fill-128 | no pressure, no credit moves |
+| hot queue 56% | loss → near shRing's 0; total posted stays 1,024 | q0 doubles 128 → 256 → 512 → ~576 as seven queues at 6% of the load pay down to the floor (7 × 64 = 448 lent) |
+| 1 ms stall, lcore 4 | loss on q3 only, **below** fill-128's 264 k | after its first stall q3 is under pressure and borrows; a stall then finds more than 128 posted. The others reclaim at once if they need to |
+| stall of the *hot* queue's core (new test) | the other seven lose nothing | they are at or below entitlement; the guarantee does not wait for q0 |
+
+Known limits, to state in the thesis: the first burst that finds a queue short is lost before the policy reacts; a lender is exposed to a burst until it reclaims; and with more buffers a stalled queue releases a longer Tx burst (§18.8).
+
+&nbsp;
+
+### 19.5 Steps
+
+1. **Model first, no node** (`analysis/credit_model.py`): queues as arrival rates with poll gaps and stalls, the three tests of §18.10 with the measured rates. Fixes `H`, the floor and the ask size before any driver code, and checks the invariants (credits conserved; overshoot bounded).
+2. **Driver, equal tickets:** `budget` dynamic, `debt`, `pool`, uniform inverse lottery, pay above the floor. Devarg `fill_dyn=1` next to `fill_en`; `fill_dyn=0` stays Phase 1 bit for bit. Test: the three rows of §18.10.
+3. **Entitlement guarantee and reclaim.** Test: stall the hot queue's core; move the hot flow from one queue to another mid-run.
+4. **Unequal tickets** (optional): a devarg for per-queue weights; show the surplus divides in proportion.
+
+Open, for the advisor: (a) is on-demand revocation (this proposal, the paper's page example) what was meant, or a free pool that queues return to on their own? (b) are unequal tickets wanted as a result, or is equal-ticket fairness enough? (c) `C` fixed at 1,024, or also swept?
