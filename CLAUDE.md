@@ -868,9 +868,24 @@ Fresh instantiation, fork `b46c129b8`, dut port `51:00.0` (MAC `b8:3f:d2:13:08:e
 (100% also: fill-128-256 3,950 MB/s, 24,268 lost; fill-128-512 4,137 MB/s, 28,081 lost.)
 
 - **Phase 1's first criterion holds at 98%:** a ring of 1024 with 128 buffers posted writes what privRing-128 writes (614 vs 735 MB/s, inside the §17.6 spread for this region) and **16× less than privRing-1024 with the same ring**. The budget, not the ring size, sets the I/O working set. `fill-128-128` and `fill-128` are indistinguishable, so nothing that scales with the ring (the CQ, the WQE and elts arrays) matters at this load.
-- **The 9 packets `fill-128` lost at 98% are not located yet** (TRex's own resolution is ±tens, §17.8); check `rx_missed_errors` and per-queue Tx against Rx in that run's log.
+- **The 9 packets `fill-128` lost at 98% are ring starvation on one queue:** `rx_missed_errors` = 9, queue 5 received 60,277,921 against 60,277,929/930 on the queues with the same share, Tx equals Rx on every queue. With 128 buffers posted and ~1 packet/µs, a ~137 µs pause of that lcore does it (`isolcpus` is off, §15.5). It is what a budget of 128 costs, not a defect of the path; privRing-128 would lose the same to the same pause.
 - **At exactly 100% the FILL runs fall into a Tx backlog, and the numbers there are not a property of the Rx path.** In every 100% FILL run all loss is on the dut's *Tx*: `rx_good_packets` equals what TRex sent, `rx_missed_errors` is 0, and `tx_good_packets` is short by exactly TRex's loss. In `fill-128-128` the whole 8,714 is queue 4 (rx 61,628,386, tx 61,619,672; the other seven match packet for packet) — the busiest queue, ~0.2% above the mean. Reading: at 100% the dut must send exactly as fast as it receives, so any backlog in the Tx rings never drains, it lands on the queue that asks for more than its fair share of the wire, and l3fwd drops when that 1024-entry Tx ring is full. Up to ~1000 packets parked in a Tx ring is ~1.5 MB more buffers in use, which would explain the doubled DRAM write and the DRAM *read* of 1.1–2.2 GB/s (38–42 MB/s at 98%). CPU is not the limit (per-lcore Rx/Tx cycles equal privRing-128's) and the INFO log level prints nothing during traffic.
 - **Open: why only the FILL path falls into it** — 5 of 5 FILL runs at 100% against 0 of 2 privRing runs, interleaved. With ring = budget the two burst functions do the same work; the one ordering difference is that the FILL path allocates its replacements after the burst instead of one per packet. Not explained by reading the code.
 - **Consequence for the method:** exactly 100% is a knife edge on the Tx side that has nothing to do with the Rx ring. Latency says the same: 32 µs for every system at 98%, 99–199 µs at 100% (privRing included). Compare systems at 98%; treat the 100% rows of §17 as carrying this caveat until re-measured.
 
-**Still to do for Phase 1 (§18.6 test 4):** one hot queue and one stalled core, at 98%, with privRing-128 and privRing-1024 beside it.
+
+### 18.8 A stalled core costs the FILL path exactly what it costs privRing-128 (2026-10-13)
+
+`stall_core.py --core 4 --stall-us 1000 --period-ms 100` (lcore 4 = queue 3; it reported mean 1,001 µs, 1.00% of the CPU, and was left running across the three runs), balanced load, **98%** of line rate, 30 s, so ~300 stalls per run. Model of §17.10 at this rate: queue 3 receives 1,002.7 packets per ms (received + missed), so a 1,001 µs stall with 128 buffers posted loses 1,003.7 − 128 = 875.7, **262.7 k** in 300 stalls.
+
+| system | ring / posted | loss (TRex) | `rx_missed_errors` | per stall | q3 received | other seven queues |
+|---|---|---|---|---|---|---|
+| privRing-128 | 128 / 128 | 264,061 | 264,061 | 880.2 | 29,816,037 | unstalled counts |
+| **fill-128** | **1024 / 128** | **263,916** | **263,916** | **879.7** | 29,816,182 | **the same counts as privRing-128, packet for packet** |
+| privRing-1024 | 1024 / 1024 | 882 | 199 | – | – | – |
+
+- **Second Phase 1 criterion holds.** The FILL path loses what privRing-128 loses (145 packets apart in 264 k), 0.5% above the model, all of it `rx_missed_errors`, **all of it on the stalled queue**: q0–q2 and q4–q7 hold identical counts in the two runs. No shared head, so no head-of-line blocking — the property shRing lacks (§17.10: 2.18 M spread over all eight queues for the same stall at 100%).
+- **The ring of 1024 does not help the FILL path here, by design:** with a static budget a stalled queue is bounded by what it had posted. That is the "like privRing with that ring size" of §18.4, and the room Phase 3's credits are meant to use.
+- **privRing-1024's row is not clean:** its l3fwd log holds ~6% more packets per queue than a 30 s run (some extra traffic reached that l3fwd instance), and TRex's 882 is 683 above the dut's 199 missed. Probably Tx drops when the stalled lcore releases ~1,000 queued packets at once into a wire that has 2% of slack — to be checked against `tx_good_packets`. Either way it loses ~300× less than the 128-buffer systems, at 16× their DRAM write.
+
+**Still to do for Phase 1 (§18.6 test 4):** one hot queue, at 98%, with privRing-128 and privRing-1024 beside it.
