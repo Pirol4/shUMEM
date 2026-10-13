@@ -1116,3 +1116,25 @@ No debts and no lottery yet: the pool is first come, first served. `fill_dyn=0` 
 - **Hot queue: 747 lost against 13,097**, all while queue 0 grew, with about half of shRing's DRAM write. (That run's per-queue `FILL credits` lines were not captured.)
 
 **Fix, fork `155a4b111`:** entitlement and reclaim. Credits up to `fill_budget` are a queue's own; above that they are borrowed. A queue the pool leaves below its entitlement draws a borrower by lottery, weighted by what each has borrowed, and leaves it a debt; the borrower pays at its next burst regardless of its own backlog and cannot re-take those credits while they are still posted (`fill_owed`). The asker retries every 256 bursts. No overcommit: the asker waits for the borrower's lcore to run, which for a 1 ms stall is at most 1 ms. Not yet run.
+
+&nbsp;
+
+### 19.11 With reclaim, a stalled queue no longer starves the others (2026-10-13, fork `155a4b111`)
+
+Same stall test (1 ms every 100 ms on lcore 4, balanced, 98%, 30 s), `dyn-128`:
+
+| | pool only (`deb358d5f`) | **with reclaim (`155a4b111`)** | fill-128 | shRing-8 |
+|---|---|---|---|---|
+| total loss | 68,334 | **100,084** | 263,916 | 2,131,633 |
+| q3 (stalled) | 65,471, budget 800 | 99,876, budget 703 (789 max), 181 credits paid | 263,916 | ~266 k |
+| q0 | **2,695**, stuck at 32, 25 refusals | **54**, budget 129, 7 reclaims | 0 | ~266 k |
+| q5 | 168, stuck at 32, 20 refusals | 154, up to 72, 4 reclaims | 0 | ~266 k |
+| the other five | 0 | 0 | 0 | ~266 k each |
+
+- **Queue 0 got its credits back from the stalled queue** and lost 54 packets, what it loses with no stall at all while it grows from the floor (61 in the balanced run of §19.10). Queue 5's 154 is likewise its balanced-run figure (220): its rare, longer pauses against a lean budget, not the stall.
+- **The stalled queue gave 181 credits back and so lost more** (99.9 k against 65.5 k): it now keeps what the others do not need, not what they are entitled to. Still 2.6× less than a static 128 and 21× less than shRing, on one queue.
+- Tx equals Rx again: ~700 packets released at once fit the Tx ring.
+
+The hot-queue run of §19.10 (pool-only build), from its `FILL credits` lines: queue 0 at 531 (mean 359, max 544, peak backlog 363 — the model said 523), queue 5 up to 64, the rest at 32, 224 credits never used.
+
+**Where Phase 3 stands.** One build, `dyn-128`, at 98% of line rate against shRing-8: 10–20× less DRAM write under balanced load, about half under a hot queue, 21× less loss with a stalled core and none of it on other queues; it loses a few hundred packets where shRing loses none (282 balanced, 747 hot queue), all while queues grow from the floor. Balanced and hot-queue runs have not been repeated on the reclaim build, nothing has been repeated at all, and every row still has IRQ 9 on lcore 1 (§19.9).
