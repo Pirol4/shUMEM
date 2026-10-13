@@ -1159,3 +1159,20 @@ Repeats of the balanced and hot-queue runs on the final build, then the balanced
 - **Moving IRQ 9 removes lcore 1's pause, as §19.9 said it would.** Queue 0's peak backlog falls from 89–98 to 13 and it stays at the floor; what loss remains (173) is queue 5's. `setup/node-setup.sh` now routes the ACPI IRQ to CPU 0 at every boot.
 - **Consequence: the hot-queue rows of §17.7, §18.9, §18.10 and above measure that interrupt.** They have to be re-measured with IRQ 9 away, where a hot queue on a core that keeps up should cost the 128-buffer systems nothing, and replaced by pauses injected on purpose (`stall_core.py` on the hot queue's lcore).
 - **Queue 5 is now the only loss under balanced load** (150–220 a minute). Its lcore pauses ~8 times a minute for 40–140 µs, cause not traced; a budget that follows 1.5 × the recent peak is caught by the longer ones. Trace CPU 6 as CPU 1 was traced before tuning the window or the headroom around it.
+
+&nbsp;
+
+### 19.13 Without IRQ 9 the hot queue costs a static budget nothing; lcore 6's pauses are the control NIC (2026-10-13)
+
+IRQ 9 on CPU 0, hot queue 56%, 98%, 30 s:
+
+| system | loss | with IRQ 9 on lcore 1 |
+|---|---|---|
+| fill-128 | **0** (`rx_missed_errors` 0, queue 0 complete) | 13,097 |
+| dyn-128, **with `perf record -C 6` running** | 15,007: queue 0 lost 50, the rest is queue 5 | 704 |
+
+- **Confirmed: the hot-queue loss was the ACPI interrupt.** A queue with 56% of the load on a core that is left alone loses nothing with 128 buffers. The hot-queue test as run until now does not separate the systems; what does is a pause, and from here on pauses are injected on purpose.
+- **The dyn-128 run is contaminated by the tracing and is not a result.** Queue 5 saw a backlog of 697 packets — a pause of ≥ 1.4 ms on lcore 6 at that queue's 0.5 packets/µs, ten times anything it showed in six untraced runs today — while `perf` was recording on that very CPU. It took 760 credits, and the reclaim worked a second time: queue 0, refused 5 times, still reached 108 and lost 50. Not to be quoted; to be re-run untraced.
+- **What the trace did show on CPU 6:** besides `migration/6` every ~4 s, six interrupts in 30 s from `mlx5_comp18@pci:0000:8a:00.0` — a completion vector of the *control* NIC, i.e. the kernel receiving our own SSH traffic on an lcore. That rate (~12 a minute) and the cost of a NET_RX softirq fit queue 5's "8 pauses a minute, 40–140 µs" (§19.8). CPU 1 showed the same device once (`mlx5_comp25`, §19.9's trace). Which lcore gets it depends on how the SSH flow hashes, so it moves between sessions.
+- **`setup/node-setup.sh` now routes every movable interrupt** to the CPUs no run uses (not 1–8 nor their hyperthreads), instead of the ACPI one alone. Not yet tried on a node; per-CPU and managed interrupts refuse the write.
+- **Under hot load queue 0's ordinary backlog reaches 72** (4.5 Mpps into bursts of 32), so it needs ~108 buffers, not the floor: 50 packets lost while it grew. A static 128 covers that from the start.
