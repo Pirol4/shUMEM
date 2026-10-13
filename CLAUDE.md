@@ -1176,3 +1176,18 @@ IRQ 9 on CPU 0, hot queue 56%, 98%, 30 s:
 - **What the trace did show on CPU 6:** besides `migration/6` every ~4 s, six interrupts in 30 s from `mlx5_comp18@pci:0000:8a:00.0` — a completion vector of the *control* NIC, i.e. the kernel receiving our own SSH traffic on an lcore. That rate (~12 a minute) and the cost of a NET_RX softirq fit queue 5's "8 pauses a minute, 40–140 µs" (§19.8). CPU 1 showed the same device once (`mlx5_comp25`, §19.9's trace). Which lcore gets it depends on how the SSH flow hashes, so it moves between sessions.
 - **`setup/node-setup.sh` now routes every movable interrupt** to the CPUs no run uses (not 1–8 nor their hyperthreads), instead of the ACPI one alone. Not yet tried on a node; per-CPU and managed interrupts refuse the write.
 - **Under hot load queue 0's ordinary backlog reaches 72** (4.5 Mpps into bursts of 32), so it needs ~108 buffers, not the floor: 50 packets lost while it grew. A static 128 covers that from the start.
+
+&nbsp;
+
+### 19.14 Every movable interrupt off the lcores (2026-10-13, fork `155a4b111`)
+
+177 interrupts accepted the new affinity (CPUs 0, 9–16, 25–31), the ACPI and control-NIC ones among them. Then `dyn-128` at 98%:
+
+| run | loss | DRAM write | queue 0 | queue 5 | the other six |
+|---|---|---|---|---|---|
+| balanced, 60 s | 178 | ~11 MB/s under load (max 26.5) | 32, peak backlog 15 | mean 55, max 96, "peak" 48, 4 grows, 6 shrinks | 32 |
+| hot queue, 30 s | 52 | – | mean 62, max 105, peak backlog 70 | mean 50, max 64 | 32 |
+
+- **Queue 5 still pauses with the interrupts gone**, with the same signature as before (§19.12): so the control NIC's interrupts were not it, or not all of it. Cause open. Not to be traced during a measured run (§19.13).
+- **Its loss is partly the policy's own doing.** A backlog that fills the budget was remembered as the budget, so the window's end set the target to 1.5 × a budget that had just failed: 32 → 64, back to 48, → 96, back to 72… and a loss at each step. Fixed in fork `ae3e52b94`: a saturated backlog is remembered as one that calls for the doubled budget, so the queue only comes down after windows with no saturation. Not yet run.
+- **With clean cores a static 128 loses nothing in either test, and dyn-128 loses 52–178**: the queues that need more than the floor find out by losing. That is the price of starting lean; the steady state is what a second traffic window in the same l3fwd run will show.
