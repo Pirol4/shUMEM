@@ -1052,3 +1052,26 @@ Loss is the same order as with debts (the hot queue pays one more pause to grow 
 - **Against shRing** the case is: equal where it is good (hot queue, working set) and an order of magnitude better where it is bad (one slow core). The balanced DRAM row is the one not yet in hand.
 - **Against rxBisect** the honest claim is *the same isolation property on hardware that exists*, not better numbers: software cannot hand a buffer to a queue whose core is not running, so a first stall costs what the queue had posted (§18.4). rxBisect cannot be measured here at all.
 - **What decides the floor, and so the balanced row:** a budget sweep on the NIC — `fill-16`, `fill-32`, `fill-64`, `fill-96` beside `fill-128`, balanced, 98%, 60 s, DRAM write and loss per queue. The harness already runs it. The floor is the smallest budget that loses nothing on the seven quiet lcores; the sweep also says whether DRAM write keeps falling below 128 or flattens.
+
+&nbsp;
+
+### 19.8 Budget sweep on the NIC: six queues are safe at 16, and DRAM write vanishes below 64 (2026-10-13)
+
+`fill-<B>` in a ring of 1,024, balanced, 98%, 60 s, one run each (fill-128 is §18.7's run). Per-queue loss is each queue's shortfall against its count in a loss-free run; it adds up to `rx_missed_errors` in every row. Tx equals Rx everywhere.
+
+| budget | posted total | DRAM write | `rx_missed_errors` | q0 (lcore 1) | q5 (lcore 6) | the other six | model for q0 (§19.6) |
+|---|---|---|---|---|---|---|---|
+| 16 | 128 | **< 17 MB/s** (mean 2.8) | 7,557 | 7,222 | 336 | **0** | 7,309 |
+| 32 | 256 | **< 14 MB/s** (mean 4.3) | 5,702 | 5,384 | 318 | **0** | 5,405 |
+| 64 | 512 | 288 MB/s | 1,609 | 1,499 | 110 | **0** | 1,600 |
+| 96 | 768 | 695 MB/s | 44 | 0 | 42 | **0** | 0 |
+| 128 | 1,024 | 614 MB/s | 9 | 0 | 9 | **0** | 0 |
+| shRing-8 (§18.10) | 1,024 | 232 MB/s | 0 | | | | |
+
+(PCM labels carry a `_98_2` suffix; the 16 and 32 files span the whole run — 94 and 74 samples — and no sample exceeds 16.5 MB/s, idle being ~2.)
+
+- **The pause on lcore 1 is confirmed, and it is not PCM.** The model fitted to the 2026-10-01 hot-queue runs (77 µs, ~2 per second, lcore 1 only) predicts queue 0's loss at three budgets it never saw, within 1–7%. The hot-queue run repeated *without* PCM loses 13,019 against 13,097 with it. CPU 1's hyperthread sibling is CPU 17, which we do not use. Cause still unknown — to trace with `perf` on CPU 1.
+- **lcore 6 pauses now and then:** about eight times a minute, 40–140 µs (336 / 318 / 110 / 42 / 9 lost as the budget grows). Rare enough that a peak remembered for 1–2 s (§19.6) would forget it between two pauses.
+- **Six of eight lcores never leave their queue unread for 16 µs in a minute.** Under this load they need 16 buffers, not 128.
+- **DRAM write has a knee between 32 and 64 buffers per queue:** practically zero at 16 and 32, 288 MB/s at 64, 600–700 at 96 and 128. Below the knee the path writes **an order of magnitude less than shRing's 232 MB/s** — at the price of loss on the two queues whose lcores pause.
+- **What this fixes in the policy (§19.7):** floor **32** (16 buys nothing in DRAM and halves the margin); the peak must be remembered for tens of seconds, not 1–2, so that queue 5 keeps what its rare pauses need; and the balanced row to beat shRing is then six queues at 32 plus queues 0 and 5 at ~1.5 × their peak — about 500 buffers posted where they are needed, instead of 1,024 spread evenly. Whether that lands under 232 MB/s depends on whether the knee is per queue or on the total; only the dynamic driver can measure it.
