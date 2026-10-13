@@ -12,6 +12,8 @@
 #
 # fill-<B> is our FILL-ring path (CLAUDE.md section 18): a 1024-entry ring per
 # queue of which only B buffers are kept posted. B is 1..1024.
+# fill-<B>-<N> does the same in a ring of N entries (N as for privring-<N>,
+# B <= N): at a fixed budget it shows what still scales with the ring.
 #
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
@@ -43,15 +45,16 @@ NB_QUEUES=8
 # Mandatory on every system, not only shRing: see CLAUDE.md section 15.1.
 COMMON_DEVARGS="rx_vec_en=0,rxq_cqe_comp_en=0"
 
-# Ring a fill-<B> queue posts its budget into: the default 1024, as privRing.
+# Ring a fill-<B> queue posts its budget into unless the name gives another:
+# the default 1024, as privRing.
 FILL_RING_SIZE=1024
 
 # Extra EAL arguments for the selected system; empty for the baselines.
 EAL_EXTRA=()
 
 usage() {
-    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>>" >&2
-    echo "       N: power of two, 64..8192;  B: 1..$FILL_RING_SIZE" >&2
+    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>[-<N>]>" >&2
+    echo "       N: power of two, 64..8192;  B: 1..N (N defaults to $FILL_RING_SIZE for fill)" >&2
     exit 1
 }
 
@@ -76,9 +79,14 @@ select_system() {
         # only direct evidence that the ring really runs below full.
         fill-*)
             local budget="${1#fill-}"
-            [[ "$budget" =~ ^[0-9]+$ ]] && (( budget >= 1 && budget <= FILL_RING_SIZE )) || usage
-            DEVARGS="fill_en=1,fill_budget=$budget,$COMMON_DEVARGS"
             NB_RXD=$FILL_RING_SIZE
+            if [[ "$budget" == *-* ]]; then
+                NB_RXD="${budget#*-}"
+                budget="${budget%%-*}"
+                is_ring_size "$NB_RXD" || usage
+            fi
+            [[ "$budget" =~ ^[0-9]+$ ]] && (( budget >= 1 && budget <= NB_RXD )) || usage
+            DEVARGS="fill_en=1,fill_budget=$budget,$COMMON_DEVARGS"
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
         shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;
