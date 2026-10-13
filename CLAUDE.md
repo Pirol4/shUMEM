@@ -848,3 +848,29 @@ On a fresh instantiation the setup clones the fork's `fill-ring` branch. In orde
 4. **It measures like privRing-128** (Phase 1's criterion), same three tests, with privRing-128 and privRing-1024 re-run beside it on the same binary: DRAM write at 100% (§17.6), one hot queue (§17.8), one stalled core at 1 ms (§17.10: loss only on queue 3, ≈ 270 k).
 
 &nbsp;
+
+### 18.7 First run on the NIC: the budget sets the working set (2026-10-13)
+
+Fresh instantiation, fork `b46c129b8`, dut port `51:00.0` (MAC `b8:3f:d2:13:08:ee`), tgen MAC `b8:3f:d2:13:08:42`. `trex-setup.sh` ran end to end on a real node for the first time, unmodified.
+
+- **Tests 1–3 of §18.6 pass.** All eight queues report `FILL-ring mode, 128 of 1024 WQEs posted`. 10% of line rate for 10 s, twice: 8,202,101 sent and received each time, `rx_missed_errors`, `rx_out_of_buffer` and `nombuf` all 0 — **the NIC runs with 128 WQEs posted in a ring of 1024** (risk 1 of §18.3 retired). `fill_en` with `rmp_en` fails the probe; `fill_budget=2048` in a ring of 1024 fails queue setup with the message (it returns `-12`; `-22` would be right — cosmetic, not fixed).
+- **`run_l3fwd.sh fill-<B>-<N>`** (shUMEM `038b1a8`) posts B buffers in a ring of N; `fill-<B>` is still N = 1024.
+
+**Balanced load, 1500 B, 60 s, one run each** (DRAM from PCM; loss and latency from TRex):
+
+| system | ring | posted | 98%: DRAM write | 98%: loss | 98%: lat avg | 100%: DRAM write | 100%: loss |
+|---|---|---|---|---|---|---|---|
+| privRing-128 | 128 | 128 | 735 MB/s | 0 | 32 µs | 1,206 MB/s | 0 |
+| fill-128-128 | 128 | 128 | 597 MB/s | 0 | 32 µs | 2,392 MB/s | 8,714 |
+| **fill-128** | **1024** | **128** | **614 MB/s** | 9 | 32 µs | 3,624 / 3,812 MB/s | 11,865 / 27,792 |
+| privRing-1024 | 1024 | 1024 | 10,131 MB/s | 0 | 32 µs | 10,431 MB/s | 0 |
+
+(100% also: fill-128-256 3,950 MB/s, 24,268 lost; fill-128-512 4,137 MB/s, 28,081 lost.)
+
+- **Phase 1's first criterion holds at 98%:** a ring of 1024 with 128 buffers posted writes what privRing-128 writes (614 vs 735 MB/s, inside the §17.6 spread for this region) and **16× less than privRing-1024 with the same ring**. The budget, not the ring size, sets the I/O working set. `fill-128-128` and `fill-128` are indistinguishable, so nothing that scales with the ring (the CQ, the WQE and elts arrays) matters at this load.
+- **The 9 packets `fill-128` lost at 98% are not located yet** (TRex's own resolution is ±tens, §17.8); check `rx_missed_errors` and per-queue Tx against Rx in that run's log.
+- **At exactly 100% the FILL runs fall into a Tx backlog, and the numbers there are not a property of the Rx path.** In every 100% FILL run all loss is on the dut's *Tx*: `rx_good_packets` equals what TRex sent, `rx_missed_errors` is 0, and `tx_good_packets` is short by exactly TRex's loss. In `fill-128-128` the whole 8,714 is queue 4 (rx 61,628,386, tx 61,619,672; the other seven match packet for packet) — the busiest queue, ~0.2% above the mean. Reading: at 100% the dut must send exactly as fast as it receives, so any backlog in the Tx rings never drains, it lands on the queue that asks for more than its fair share of the wire, and l3fwd drops when that 1024-entry Tx ring is full. Up to ~1000 packets parked in a Tx ring is ~1.5 MB more buffers in use, which would explain the doubled DRAM write and the DRAM *read* of 1.1–2.2 GB/s (38–42 MB/s at 98%). CPU is not the limit (per-lcore Rx/Tx cycles equal privRing-128's) and the INFO log level prints nothing during traffic.
+- **Open: why only the FILL path falls into it** — 5 of 5 FILL runs at 100% against 0 of 2 privRing runs, interleaved. With ring = budget the two burst functions do the same work; the one ordering difference is that the FILL path allocates its replacements after the burst instead of one per packet. Not explained by reading the code.
+- **Consequence for the method:** exactly 100% is a knife edge on the Tx side that has nothing to do with the Rx ring. Latency says the same: 32 µs for every system at 98%, 99–199 µs at 100% (privRing included). Compare systems at 98%; treat the 100% rows of §17 as carrying this caveat until re-measured.
+
+**Still to do for Phase 1 (§18.6 test 4):** one hot queue and one stalled core, at 98%, with privRing-128 and privRing-1024 beside it.
