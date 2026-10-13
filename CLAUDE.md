@@ -1094,3 +1094,25 @@ Loss is the same order as with debts (the hot queue pays one more pause to grow 
 - at stop each queue logs `FILL credits: budget <now>, <mean> mean, <max> max (floor F); peak backlog; grows, shrinks, denied; pool`.
 
 No debts and no lottery yet: the pool is first come, first served. `fill_dyn=0` is Phase 1 plus one branch per burst. `harness/run_l3fwd.sh dyn-<E>[-<F>]` runs it. Invariant by construction: held credits of all queues + pool = `E` × queues, and a queue never has more posted than it holds.
+
+&nbsp;
+
+### 19.10 First runs of the credit path on the NIC (2026-10-13, fork `deb358d5f`: pool only, no reclaim)
+
+`run_l3fwd.sh dyn-128` (entitlement 128, floor 32, ring 1,024, cap 1,024), 98% of line rate, IRQ 9 still on lcore 1 as in every other row. Smoke at 10% first: 0 lost, eight budgets at 32, pool 768.
+
+| test | privRing-128 | fill-128 | shRing-8 | **dyn-128** |
+|---|---|---|---|---|
+| balanced, 60 s: DRAM write | 735 MB/s | 614 MB/s | 232 MB/s | **~10–20 MB/s** (mean 9.4 over the whole file, max 21.4) |
+| balanced: loss | 0 | 9 | 0 | 282 (q5 220, q0 61) |
+| balanced: posted total | 1,024 | 1,024 | 1,024 | ~420 |
+| 1 ms stall on lcore 4, 30 s: loss | 264,061 | 263,916 | 2,131,633 | **68,334** (q3 65,471; **q0 2,695; q5 168**) |
+| hot queue 56%, 30 s: loss | 13,022 | 13,097 | 0 | **747** |
+| hot queue: DRAM write | 322 MB/s | 476 MB/s | 800 MB/s | 427 MB/s |
+
+- **Balanced: the working set follows the load.** Queue 0 settled at 121 (mean 114, peak backlog 89; the model said ~117), queue 5 at 72 (peak 48), the other six never left 32. DRAM write is an order of magnitude under shRing's, at the DRAM cost of fill-32 and a twentieth of its loss (282 against 5,702). The 282 are the pauses that found queues 0 and 5 still small; shRing and fill-128 lose 0–9 here.
+- **Stall: 4× less than a static 128 and 31× less than shRing.** Queue 3 doubled five times to 800 (32 + the whole pool) and each stall then lost ~200 instead of ~875. `tx_good_packets` equals `rx_good_packets`: releasing 800 packets at once did not overflow the Tx ring.
+- **But the stalled queue starved two others: the isolation claim failed in this version.** With the pool at 0, queue 0 was refused 25 times and queue 5 20 times; they stayed at 32 and lost 2,695 and 168 packets they would have kept with a static 128. First come, first served is not enough — the case §19.6 flagged in the model between two borrowers also hits a queue asking for less than its own entitlement.
+- **Hot queue: 747 lost against 13,097**, all while queue 0 grew, with about half of shRing's DRAM write. (That run's per-queue `FILL credits` lines were not captured.)
+
+**Fix, fork `155a4b111`:** entitlement and reclaim. Credits up to `fill_budget` are a queue's own; above that they are borrowed. A queue the pool leaves below its entitlement draws a borrower by lottery, weighted by what each has borrowed, and leaves it a debt; the borrower pays at its next burst regardless of its own backlog and cannot re-take those credits while they are still posted (`fill_owed`). The asker retries every 256 bursts. No overcommit: the asker waits for the borrower's lcore to run, which for a 1 ms stall is at most 1 ms. Not yet run.
