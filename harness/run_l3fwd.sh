@@ -9,11 +9,18 @@
 #   sudo harness/run_l3fwd.sh privring-128
 #   sudo harness/run_l3fwd.sh shring-8
 #   sudo harness/run_l3fwd.sh fill-128
+#   sudo harness/run_l3fwd.sh dyn-128
 #
 # fill-<B> is our FILL-ring path (CLAUDE.md section 18): a 1024-entry ring per
 # queue of which only B buffers are kept posted. B is 1..1024.
 # fill-<B>-<N> does the same in a ring of N entries (N as for privring-<N>,
 # B <= N): at a fixed budget it shows what still scales with the ring.
+#
+# dyn-<E> is the FILL-ring path with credits (CLAUDE.md section 19): every
+# queue is entitled to E buffers, their sum caps the posted total, and each
+# queue holds what its backlog calls for, from a floor of 32. dyn-<E>-<F>
+# sets the floor to F. The ring is 1024. When l3fwd stops, every queue prints
+# a `FILL credits` line with its budget now, mean and max.
 #
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
@@ -53,8 +60,9 @@ FILL_RING_SIZE=1024
 EAL_EXTRA=()
 
 usage() {
-    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>[-<N>]>" >&2
+    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>[-<N>]|dyn-<E>[-<F>]>" >&2
     echo "       N: power of two, 64..8192;  B: 1..N (N defaults to $FILL_RING_SIZE for fill)" >&2
+    echo "       E: 1..$FILL_RING_SIZE;  F: 1..E (default 32)" >&2
     exit 1
 }
 
@@ -87,6 +95,20 @@ select_system() {
             fi
             [[ "$budget" =~ ^[0-9]+$ ]] && (( budget >= 1 && budget <= NB_RXD )) || usage
             DEVARGS="fill_en=1,fill_budget=$budget,$COMMON_DEVARGS"
+            EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
+        # Budgets that follow the load. The driver's per-queue summary at stop
+        # is at INFO level too.
+        dyn-*)
+            local entitled="${1#dyn-}" floor=""
+            if [[ "$entitled" == *-* ]]; then
+                floor="${entitled#*-}"
+                entitled="${entitled%%-*}"
+                [[ "$floor" =~ ^[0-9]+$ ]] && (( floor >= 1 )) || usage
+            fi
+            [[ "$entitled" =~ ^[0-9]+$ ]] && (( entitled >= 1 && entitled <= FILL_RING_SIZE )) || usage
+            [[ -z "$floor" ]] || (( floor <= entitled )) || usage
+            DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor},$COMMON_DEVARGS"
+            NB_RXD=$FILL_RING_SIZE
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
         shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;

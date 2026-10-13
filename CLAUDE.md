@@ -1075,3 +1075,22 @@ Loss is the same order as with debts (the hot queue pays one more pause to grow 
 - **Six of eight lcores never leave their queue unread for 16 µs in a minute.** Under this load they need 16 buffers, not 128.
 - **DRAM write has a knee between 32 and 64 buffers per queue:** practically zero at 16 and 32, 288 MB/s at 64, 600–700 at 96 and 128. Below the knee the path writes **an order of magnitude less than shRing's 232 MB/s** — at the price of loss on the two queues whose lcores pause.
 - **What this fixes in the policy (§19.7):** floor **32** (16 buys nothing in DRAM and halves the margin); the peak must be remembered for tens of seconds, not 1–2, so that queue 5 keeps what its rare pauses need; and the balanced row to beat shRing is then six queues at 32 plus queues 0 and 5 at ~1.5 × their peak — about 500 buffers posted where they are needed, instead of 1,024 spread evenly. Whether that lands under 232 MB/s depends on whether the knee is per queue or on the total; only the dynamic driver can measure it.
+
+&nbsp;
+
+### 19.9 The pause is the ACPI interrupt, and the driver has credits (2026-10-13)
+
+**The pause on lcore 1 is IRQ 9, `acpi`.** `perf record -C 1 -e sched:sched_switch,irq:irq_handler_entry,workqueue:workqueue_execute_start` for 10 s with l3fwd running: IRQ 9 fires on CPU 1 **twice in a row (~220 µs apart), once per second** — the "two pauses per second" of §19.6. Nothing else on that CPU is long enough: `kworker/1:0` running `psi_avgs_work` holds it 2–8 µs about once a second, `migration/1` 1 µs every 4 s. The handler's own duration was not traced (`irq_handler_exit` was not recorded); ~77 µs each is what the loss says.
+
+- **So the hot-queue loss of §17.7, §18.9 and §18.10 is an interrupt that happens to be routed to the lcore serving the hot queue.** It is a real disturbance, but an accidental one: with the hot flow on another queue, or IRQ 9 routed elsewhere, the 128-buffer systems would probably lose nothing in that test.
+- **For the method:** route IRQ 9 away from the lcores in `node-setup.sh` (`/proc/irq/9/smp_affinity_list`; check `irqbalance`), then inject pauses on purpose with `stall_core.py` — short ones on the hot queue's lcore are the honest version of the hot-queue test. Until that is done, every row measured so far carries this interrupt on lcore 1. Not yet tried on the node.
+
+**Step 2 is written (fork `deb358d5f`, not yet run on a NIC):** `fill_dyn=1` next to `fill_en=1,fill_budget=<E>`, optional `fill_floor=<F>` (default 32). It is the lean policy of §19.7:
+
+- a queue starts at the floor; the rest of its entitlement `E` goes to a per-port pool, one atomic word (`priv->fill_pool`);
+- **backlog** = packets the burst returned, plus — when the burst came back full — the completions still waiting, counted by a binary search on the CQE ownership bit (`mlx5_rxq_fill_pending`, ≤ 10 CQE reads, on the first full burst of a run and every 8th after);
+- a new peak in the current window calls `mlx5_rxq_fill_rebudget`: target = 1.5 × the largest backlog of the last one to two 10 s windows, at least twice the budget if the backlog used every posted buffer, clamped to [floor, ring]; credits come from the pool;
+- every 256 bursts the TSC is read; when a window ends the older peak is forgotten and the budget may come down. A credit returns to the pool only once its buffer has been read (`fill_held`);
+- at stop each queue logs `FILL credits: budget <now>, <mean> mean, <max> max (floor F); peak backlog; grows, shrinks, denied; pool`.
+
+No debts and no lottery yet: the pool is first come, first served. `fill_dyn=0` is Phase 1 plus one branch per burst. `harness/run_l3fwd.sh dyn-<E>[-<F>]` runs it. Invariant by construction: held credits of all queues + pool = `E` × queues, and a queue never has more posted than it holds.
