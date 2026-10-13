@@ -903,3 +903,20 @@ Fresh instantiation, fork `b46c129b8`, dut port `51:00.0` (MAC `b8:3f:d2:13:08:e
 - **Third Phase 1 criterion holds:** 13,097 against 13,022, all on the hot queue; DRAM write in the "almost nothing leaks" region for both (§17.6: values under ~1 GB/s are not precise), 12–18× below privRing-1024. TRex is ~13 packets off the dut's count in each run, the known stray unicast of §17.8.
 - **Phase 1 is done, and Phase 2 with it** (the code never was single-queue): with a static budget of 128 in a ring of 1024, eight queues over one mempool measure like privRing-128 on DRAM write (§18.7), a stalled core (§18.8) and a hot queue (this table), at 98% of line rate. The budget, not the ring, is the working set.
 - **This table is the case Phase 3 has to win.** The hot queue loses 13 k because it may post only 128 buffers while seven queues at 6% of the load sit on 128 each and 896 slots of its own ring stay empty. shRing lost 170 here (§17.7, at 100%) by lending it the idle queues' buffers; privRing-1024 loses nothing at 12× the DRAM write. Target: the hot queue's loss near zero with the total posted still ~1,024, **and** the stalled-core row of §18.8 unchanged (loss on the stalled queue only).
+
+### 18.10 shRing-8 re-measured at 98%, and the table Phase 3 is judged by (2026-10-13)
+
+Same instantiation, same binary, same three tests. Stall model for shRing at this rate (§17.10): the 1,024 shared buffers last 1,024 / 8.038 per µs = 127 µs once the head blocks, so a 1,001 µs stall loses (1,001 − 127) × 8.038 = 7,022, **2.107 M** in 300 stalls.
+
+| test (98% of line rate) | privRing-128 | **fill-128** (ring 1024) | shRing-8 | privRing-1024 |
+|---|---|---|---|---|
+| balanced, 60 s: DRAM write | 735 MB/s | 614 MB/s | **232 MB/s** | 10,131 MB/s |
+| balanced: loss | 0 | 9 | 0 | 0 |
+| 1 ms stall on lcore 4, 30 s: loss | 264,061 | 263,916 | **2,131,633** | 882 |
+| stall: where | q3 only | q3 only | **every queue, −0.9% each** | q3 (Tx) |
+| hot queue 56%, 30 s: loss | 13,022 | 13,097 | **0** | 0 |
+| hot queue: DRAM write | 322 MB/s | 476 MB/s | 800 MB/s | 5,915 MB/s |
+
+- **shRing's two faces hold at 98%.** It lends the hot queue the idle queues' buffers (0 lost where the 128-buffer systems lose 13 k) and it is the leanest under balanced load, but one stalled core costs it **8.1× what it costs the FILL path** (2.13 M vs 0.26 M), spread over all eight queues (each ~29.87 M received against ~30.14 M unstalled), 1.2% above the model. `contention` 245,396 balanced in 60 s, 120,454 in the stall run.
+- **The hot-queue l3fwd log of shRing was not captured in the paste** (a ~5 s aborted start, `l3fwd_shring-8_20261013-143121.log`, took its place among the last three); loss is TRex's, and it is 0.
+- **What Phase 3 has to show, in this table's terms:** the hot-queue row of shRing (≈0) together with the stall row of fill-128 (loss on the stalled queue only, ~264 k), at a balanced DRAM write that stays under ~1 GB/s. No system here has both.
