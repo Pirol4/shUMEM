@@ -1,0 +1,14 @@
+# Loss-against-DRAM trade-off sweep (CLAUDE.md 19.19), in priority order:
+# a session cut short still gives a curve and brackets the drift of 19.18.
+# Balanced load; harness/sweep.sh runs each line as one l3fwd start.
+#
+# label               system       window_ms  headroom_pct  [extra rate_sweep.py args]
+dyn-128_w10_h150      dyn-128      10000      150
+dyn-128_w30_h150      dyn-128      30000      150
+dyn-128_w10_h300      dyn-128      10000      300
+dyn-128_w30_h300      dyn-128      30000      300
+dyn-128_w2_h150       dyn-128      2000       150
+shring-8              shring-8     -          -
+dyn-128_w10_h150      dyn-128      10000      150
+dyn-128-64_w10_h150   dyn-128-64   10000      150
+fill-128              fill-128     -          -

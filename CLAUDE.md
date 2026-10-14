@@ -1286,6 +1286,8 @@ Fork `4552a4a52` makes the two compile-time guesses of the policy devargs: `fill
 
 **Why these two knobs.** With interrupts off the lcores, dyn-128's steady-state loss is queue 5's rare pauses (§19.15: ~8 a minute, 40–140 µs, cause open), and a 140 µs pause leaves ~143 packets waiting at 1.02 per µs. A queue only holds enough if it still remembers such a pause (window) and keeps enough above it (headroom). Both make that queue hold more, which is what writes DRAM. The curve is the claim: how much DRAM the last tens of packets a minute cost.
 
+**Runner.** `harness/sweep.sh harness/sweeps/tradeoff.txt` on the dut (own user, inside tmux, `TGEN_MAC=` set) runs the whole table unattended: per line it starts `run_l3fwd.sh` with `PCM_LABEL`, waits for the port, runs `rate_sweep.py` on the tgen over ssh on the control network, stops l3fwd with SIGINT and appends counters, `FILL credits` lines and the PCM mean to `/mydata/exp/sweep/summary.txt`.
+
 **Protocol.** Balanced, 98%, `--rates 98,98 --duration 60` (window 1 = start-up, window 2 = steady state; the steady-state window is the point on the curve), `PCM_LABEL` per run, all rows into one `tradeoff.csv`. Per-queue `FILL credits` lines from the l3fwd log. Order, so that a short session still gives a curve and brackets the drift of §19.18:
 
 | # | system | window | headroom | why |
