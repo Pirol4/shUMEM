@@ -59,7 +59,7 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
 [[ "$tgen_ip" != 10.10.1.* ]] || die "$TGEN_HOST is the experiment link ($tgen_ip), which TRex holds; set TGEN_HOST to the control-network name"
 [[ "$("${SSH[@]}" hostname 2>/dev/null)" == tgen* ]] || die "$TGEN_HOST is not the tgen, or cannot be reached by ssh without a password.
        On dut:  ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519 (if absent); cat ~/.ssh/id_ed25519.pub
-       On tgen: append that line to ~/.ssh/authorized_keys"
+       On tgen: append that line to ~/.ssh/authorized_keys2 (authorized_keys is rewritten by CloudLab)"
 "${SSH[@]}" "pgrep -f '_t-rex-6[4]'" >/dev/null || die "TRex is not running on $TGEN_HOST (cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check)"
 
 mkdir -p "$OUT_DIR"
