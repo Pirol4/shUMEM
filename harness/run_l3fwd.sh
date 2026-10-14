@@ -21,6 +21,10 @@
 # queue holds what its backlog calls for, from a floor of 32. dyn-<E>-<F>
 # sets the floor to F. The ring is 1024. When l3fwd stops, every queue prints
 # a `FILL credits` line with its budget now, mean and max.
+# FILL_WINDOW_MS (default 10000) and FILL_HEADROOM (percent of the peak
+# backlog, default 150) set the other two knobs of the policy, for the
+# loss-against-DRAM sweep (CLAUDE.md 19.19):
+#   sudo FILL_WINDOW_MS=2000 FILL_HEADROOM=200 harness/run_l3fwd.sh dyn-128
 #
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
@@ -107,7 +111,11 @@ select_system() {
             fi
             [[ "$entitled" =~ ^[0-9]+$ ]] && (( entitled >= 1 && entitled <= FILL_RING_SIZE )) || usage
             [[ -z "$floor" ]] || (( floor <= entitled )) || usage
-            DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor},$COMMON_DEVARGS"
+            [[ -z "${FILL_WINDOW_MS:-}" || "$FILL_WINDOW_MS" =~ ^[0-9]+$ ]] || usage
+            [[ -z "${FILL_HEADROOM:-}" || "$FILL_HEADROOM" =~ ^[0-9]+$ ]] || usage
+            DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor}"
+            DEVARGS+="${FILL_WINDOW_MS:+,fill_window_ms=$FILL_WINDOW_MS}${FILL_HEADROOM:+,fill_headroom=$FILL_HEADROOM}"
+            DEVARGS+=",$COMMON_DEVARGS"
             NB_RXD=$FILL_RING_SIZE
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.

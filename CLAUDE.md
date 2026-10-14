@@ -1277,3 +1277,27 @@ Two more runs of each of the three tests, dyn-128 and shRing-8 alternating, into
 - **Balanced loss is a tie.** With the interrupts off the lcores shRing loses 75–113 packets a minute and dyn-128 71–177; the 0 that shRing showed earlier in the day (§18.10) did not come back in three runs. Whatever pauses lcore 6 hurts both.
 - **Balanced DRAM write moves a lot between runs, for both systems, and together:** the third pair (111 and 300 MB/s) is two to five times the second (21 and 153), taken minutes apart. The order holds in every back-to-back pair, but the ratio is 2.7–7×, not the 20× of the best pair. It needs more runs and a look at what else changes on the node between them (PCM itself samples once a second on core 0).
 - **For the summary of §19.17:** read "11–49 MB/s" as 11–111, and "0–94" for shRing's balanced loss as 0–113.
+
+&nbsp;
+
+### 19.19 The loss–DRAM trade-off sweep: knobs as devargs, plan for one hour on the nodes (2026-10-14)
+
+Fork `4552a4a52` makes the two compile-time guesses of the policy devargs: `fill_window_ms` (1–600,000, default 10,000) and `fill_headroom` (percent of the peak backlog, 100–1,000, default 150); with neither set it behaves exactly as `ae3e52b94`. The l3fwd start-up line now prints window and headroom. Harness: `sudo FILL_WINDOW_MS=30000 FILL_HEADROOM=300 harness/run_l3fwd.sh dyn-128` (the floor stays `dyn-<E>-<F>`).
+
+**Why these two knobs.** With interrupts off the lcores, dyn-128's steady-state loss is queue 5's rare pauses (§19.15: ~8 a minute, 40–140 µs, cause open), and a 140 µs pause leaves ~143 packets waiting at 1.02 per µs. A queue only holds enough if it still remembers such a pause (window) and keeps enough above it (headroom). Both make that queue hold more, which is what writes DRAM. The curve is the claim: how much DRAM the last tens of packets a minute cost.
+
+**Protocol.** Balanced, 98%, `--rates 98,98 --duration 60` (window 1 = start-up, window 2 = steady state; the steady-state window is the point on the curve), `PCM_LABEL` per run, all rows into one `tradeoff.csv`. Per-queue `FILL credits` lines from the l3fwd log. Order, so that a short session still gives a curve and brackets the drift of §19.18:
+
+| # | system | window | headroom | why |
+|---|---|---|---|---|
+| 1 | dyn-128 | 10 s | 150 | reference; also checks the new build reproduces §19.15 |
+| 2 | dyn-128 | 30 s | 150 | remember a rare pause longer |
+| 3 | dyn-128 | 10 s | 300 | more above the remembered pause |
+| 4 | dyn-128 | 30 s | 300 | most conservative corner |
+| 5 | dyn-128 | 2 s | 150 | forgetful corner |
+| 6 | shring-8 | — | — | anchor on the same axes, same session |
+| 7 | dyn-128 | 10 s | 150 | drift check against #1 |
+| 8 | dyn-128-64 | 10 s | 150 | floor instead of headroom |
+| 9 | fill-128 | — | — | static anchor |
+
+**Expected:** loss in window 2 falls and DRAM write rises from #5 to #4; the question is whether some point reaches shRing's balanced loss (75–113 a minute, §19.18) or 0 while staying under shRing's DRAM write. If even #4 keeps losing on queue 5, its pauses outgrow what a 1,024-entry policy can remember and the fix belongs to the core, not the budget.
