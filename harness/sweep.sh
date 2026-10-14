@@ -8,7 +8,7 @@
 #
 # Usage (on dut, inside tmux, as your own user: the ssh to tgen uses your key,
 # and run_l3fwd.sh is started with sudo):
-#   TGEN_MAC=<mac> harness/sweep.sh harness/sweeps/tradeoff.txt
+#   TGEN_HOST=<tgen control name> TGEN_MAC=<mac> harness/sweep.sh harness/sweeps/tradeoff.txt
 #
 # Sweep file: one run per line, `#` comments,
 #   <label> <system> <window_ms|-> <headroom_pct|-> [extra rate_sweep.py args]
@@ -16,9 +16,10 @@
 #
 # Environment:
 #   TGEN_MAC   required: src_mac in the tgen's /etc/trex_cfg.yaml
-#   TGEN_HOST  tgen on the control network (default: this host's FQDN with
-#              dut. replaced by tgen.); never the 10.10.1.x name, which TRex
-#              holds
+#   TGEN_HOST  required: the tgen's control-network name, as the CloudLab List
+#              View gives it (sm110p-....wisc.cloudlab.us). Not derived from
+#              this host's name: on 2026-10-14 tgen.<exp>... resolved to the
+#              dut itself. Never the 10.10.1.x name, which TRex holds.
 #   RATES      default 98,98: start-up window, then steady state (CLAUDE.md 19.15)
 #   DURATION   seconds per rate, default 60
 #   CSV        rate_sweep.py output on the tgen, default /mydata/exp/tradeoff.csv
@@ -35,7 +36,7 @@ OUT_DIR="$EXP_DIR/sweep"
 RATES="${RATES:-98,98}"
 DURATION="${DURATION:-60}"
 CSV="${CSV:-/mydata/exp/tradeoff.csv}"
-TGEN_HOST="${TGEN_HOST:-$(hostname -f | sed 's/^dut\./tgen./')}"
+TGEN_HOST="${TGEN_HOST:-}"
 TGEN_TREX_DIR=/local/repository/harness/trex
 # The ssh client runs beside busy-polling lcores 1-8; keep it on CPU 0.
 SSH=(taskset -c 0 ssh -o BatchMode=yes -o ConnectTimeout=10
@@ -48,14 +49,15 @@ log() { echo "[sweep $(date +%H:%M:%S)] $*"; }
 [[ -n "$PLAN" && -r "$PLAN" ]] || die "usage: TGEN_MAC=<mac> $0 <sweep file>"
 [[ "$EUID" -ne 0 ]] || die "run as your own user, not with sudo: the ssh to tgen needs your key"
 [[ -n "${TGEN_MAC:-}" ]] || die "set TGEN_MAC (src_mac in tgen's /etc/trex_cfg.yaml)"
+[[ -n "$TGEN_HOST" ]] || die "set TGEN_HOST to the tgen's control-network name (CloudLab List View)"
 sudo -n true 2>/dev/null || die "sudo asks for a password; run_l3fwd.sh needs root"
 [[ -w "$EXP_DIR" ]] || die "$EXP_DIR not writable: sudo mkdir -p $EXP_DIR && sudo chown \$USER $EXP_DIR"
 ! pgrep -x dpdk-l3fwd >/dev/null || die "an l3fwd is already running; stop it first"
 
 tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
-[[ -n "$tgen_ip" ]] || die "cannot resolve $TGEN_HOST; set TGEN_HOST to the tgen's control-network name (hostname -f on tgen)"
+[[ -n "$tgen_ip" ]] || die "cannot resolve $TGEN_HOST"
 [[ "$tgen_ip" != 10.10.1.* ]] || die "$TGEN_HOST is the experiment link ($tgen_ip), which TRex holds; set TGEN_HOST to the control-network name"
-"${SSH[@]}" true 2>/dev/null || die "cannot ssh to $TGEN_HOST without a password.
+[[ "$("${SSH[@]}" hostname 2>/dev/null)" == tgen* ]] || die "$TGEN_HOST is not the tgen, or cannot be reached by ssh without a password.
        On dut:  ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519 (if absent); cat ~/.ssh/id_ed25519.pub
        On tgen: append that line to ~/.ssh/authorized_keys"
 "${SSH[@]}" "pgrep -f '_t-rex-6[4]'" >/dev/null || die "TRex is not running on $TGEN_HOST (cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check)"
