@@ -130,7 +130,7 @@ summarize() {
              }
              END {
                  if (n > 0)
-                     printf "   cycles/pkt over %d pkts: rx %.1f  fwd %.1f  common-ring objects/pkt %.5f\n",
+                     printf "   cycles/pkt over %.0f pkts: rx %.1f  fwd %.1f  common-ring objects/pkt %.5f\n",
                             n, rx / n, fw / n, ring / n
              }' "$out"
         "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
