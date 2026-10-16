@@ -1,0 +1,28 @@
+# Stall tests (CLAUDE.md 19.21), 98%, one 30 s window each, ~70 s per run.
+# Rows 1-12 add two repetitions to the two quotable rows of 19.18 (n=3 -> 5);
+# rows 13-15 are the two-borrower case of 19.17 item 4, never measured.
+# Systems alternate so drift during the session hits all three alike.
+#
+# label                     system    window_ms headroom_pct  options / extra rate_sweep.py args
+#
+# A cold core stalled: lcore 4 (queue 3), 1 ms every 100 ms, balanced load.
+cold-stall_dyn-128          dyn-128   -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8         shring-8  -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128         fill-128  -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_dyn-128          dyn-128   -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8         shring-8  -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128         fill-128  -  -  rates=98 duration=30 stall=4:1000:100
+#
+# The hot queue's core stalled: lcore 1 (queue 0, 56% of the load).
+hot-stall_dyn-128           dyn-128   -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8          shring-8  -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128          fill-128  -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_dyn-128           dyn-128   -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8          shring-8  -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128          fill-128  -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+#
+# Two borrowers: queue 0 hot AND lcore 4 stalled. Both queues want more than
+# their entitlement at once; the pool serves them first come (19.6).
+two-borrowers_dyn-128       dyn-128   -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_fill-128      fill-128  -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shring-8      shring-8  -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
