@@ -1332,3 +1332,49 @@ Reply to the progress e-mail, on "a ring of 1,024 keeping only 128 buffers poste
 4. More balanced repetitions of dyn-128 and shRing-8 back to back if time remains, for the DRAM-write spread of §19.18.
 
 **What would change the story:** common-ring traffic of the same order as the packet count would mean the caches are not absorbing it, and the design would share a hot structure after all — at which point the per-queue FILL position no longer removes cross-core synchronisation, it only moves it. A difference between systems would point at the Tx side (buffers freed by one lcore's Tx completion while another lcore allocates), not at the credits.
+
+&nbsp;
+
+### 19.21 Ready for 21/10: one runner for every test, and the runbook (2026-10-16)
+
+**What the harness does now** (all tried end to end on this WSL box against mocks of l3fwd, ssh, TRex and PCM — nothing on a node yet):
+
+- **`harness/sweep.sh` runs stall tests too.** Per-line options in the sweep file: `rates=…`, `duration=…`, `stall=<core>:<us>:<ms>` (starts `stall_core.py` just before the traffic, stops it right after, its report goes into the summary); anything else goes to `rate_sweep.py` (`--hot-share 0.5`).
+- **DRAM per traffic window.** sweep.sh stamps each `rate_sweep.py` result line with the dut's clock as it arrives; `harness/pcm_window.py` averages the PCM samples between window start and end (2 s trimmed at each end), by timestamp. This replaces `pcm_summary.sh`'s "write > 20 MB/s" rule, which drops dyn-128's whole run (it writes ~10–20 MB/s under load, §19.10), and gives the steady-state window of `--rates 98,98` its own figure.
+- **Each summary block starts with a `run:` line** (system, knobs, rates, duration, stall, extra args), so the summary alone can be analysed.
+- **Checks before the first run:** l3fwd built from fork `9601a7530` or later (else it prints the pull + ninja to run); numbered interrupts that fire on lcores 1–8 within 3 s (warning, with names); ACPI IRQ 9 not on CPU 0 (warning); pause frames on (warning).
+- **Two bugs fixed that the 2026-10-14 sweep would have hit:** (1) l3fwd wrote its final counters into `<label>.out` at its own file offset, over the `rate_sweep.py` lines `tee` had appended — the summary lost TRex's per-window loss (the tgen CSV kept it); every writer now appends. (2) `stall_core.py` started in the background inherits SIGINT ignored, so Python never raised KeyboardInterrupt: it never stopped and never printed its stall count; it now installs its own handlers (sweep.sh also kills it after 10 s).
+- **`analysis/sweep_report.py summary.txt [--csv f] [--plot out]`**: one row per window (loss, loss per minute, DRAM read/write, cycles per packet, common-ring objects per packet, stall count), and the trade-off figure — loss per minute against DRAM write (log) in the last window of every balanced run without a stall, one color and marker per system (privRing-1024, privRing-128 and shRing-8 keep their `stall_model.py` colors), dyn-128 points labelled by their knobs. Needs matplotlib (not on this box: `pip install --target <dir> matplotlib` and `PYTHONPATH=<dir>`).
+
+**Batteries** (`harness/sweeps/`, ~70 s per 30 s run and ~155 s per 2 × 60 s run, setup included):
+
+| file | runs | time | answers |
+|---|---|---|---|
+| `stall.txt` | 15 | ~18 min | n = 5 for the two stall rows of §19.18; first two-borrower measurement (§19.17 item 4) |
+| `pathcost.txt` | 10 | ~26 min | the advisor's mempool question (§19.20), cycles per packet, two balanced repetitions of every system |
+| `tradeoff.txt` | 9 | ~23 min | the loss–DRAM curve (§19.19) |
+
+**Runbook, in order.** Every command on the dut, from `/local/repository`, inside tmux, as your own user unless it says sudo.
+
+1. Nodes: if it is a fresh instantiation, setup clones the fork's newest `fill-ring`; otherwise `sudo git -C /mydata/dpdk-research/shring-dpdk pull && sudo ninja -C /mydata/dpdk-research/shring-dpdk/build` and `sudo git -C /local/repository pull` (also on the tgen). `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp` on both nodes. Note both experiment MACs.
+2. tgen: TRex in tmux (`cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check`); dut's ssh key in tgen's `~/.ssh/authorized_keys2` (§19.19).
+3. dut, the three batteries back to back, stall first (it is the result that can be quoted):
+   ```
+   for b in stall pathcost tradeoff; do
+     TGEN_HOST=<tgen control name> TGEN_MAC=<tgen mac> CSV=/mydata/exp/day21_$b.csv \
+       harness/sweep.sh harness/sweeps/$b.txt || break
+   done
+   ```
+   Read the warnings of the first seconds: an interrupt on an lcore or a stale build is worth stopping for.
+4. Before ending the experiment: copy `/mydata/exp` from both nodes and `/mydata/dpdk-research/results` from the dut.
+5. Here: `python3 analysis/sweep_report.py summary.txt --csv … --plot docs/figures/tradeoff`, then §19.22 with the numbers.
+
+**Predictions to hold the results against** (98%, 30 s, 300 stalls; queue 3 under `--hot-share 0.5` gets 6.25% of 8.04 packets/µs = 0.50 per µs, ~503 per 1 ms stall):
+
+| test | fill-128 | shRing-8 | dyn-128 |
+|---|---|---|---|
+| cold stall | ~263 k, queue 3 only (§18.8) | ~2.13 M, every queue | ~75 k, queue 3 only (§19.18) |
+| hot-core stall | ~1.32 M, queue 0 only | ~2.14 M, ~133 k on each cold queue | ~1.13 M, queue 0 only |
+| **two borrowers** | (503 − 128) × 300 ≈ **113 k**, queue 3 only; queue 0 0 (IRQs moved, §19.13) | ≈ (1,001 − 127) × 8.04 × 300 ≈ **2.1 M**, every queue | queue 3 doubles 32 → 512 in four stalls, then holds ~500 of the ~660 credits left after queue 0's ~108 and the others' floors: **a few thousand**, all in the first stalls; queue 0 near 0 unless the pool runs dry |
+
+The two-borrower row is the first test where the credits should beat the static budget by more than the 2–4× of the cold stall — about 50× — because the stalled queue's need (~500) fits in what the others leave. If queue 0 loses there, first come first served is the cause (§19.6) and proportional shares stop being optional.
