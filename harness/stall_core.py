@@ -12,6 +12,7 @@ Example: 1 ms stall every 100 ms on lcore 4 (queue 3), until Ctrl-C:
 """
 import argparse
 import os
+import signal
 import sys
 import time
 
@@ -47,6 +48,11 @@ def main():
     if os.geteuid() != 0:
         sys.exit("must run as root (SCHED_FIFO)")
     take_core(args.core)
+    # Started in the background by a script (harness/sweep.sh), this process
+    # inherits SIGINT ignored, and Python then never raises KeyboardInterrupt;
+    # take both signals back so the stall count is always printed.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
 
     stall_s = args.stall_us / 1e6
     period_s = args.period_ms / 1e3
