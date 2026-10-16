@@ -1303,3 +1303,32 @@ Fork `4552a4a52` makes the two compile-time guesses of the policy devargs: `fill
 | 9 | fill-128 | — | — | static anchor |
 
 **Expected:** loss in window 2 falls and DRAM write rises from #5 to #4; the question is whether some point reaches shRing's balanced loss (75–113 a minute, §19.18) or 0 while staying under shRing's DRAM write. If even #4 keeps losing on queue 5, its pauses outgrow what a 1,024-entry policy can remember and the fix belongs to the core, not the budget.
+
+&nbsp;
+
+### 19.20 The advisor's questions on the shared mempool, and what 21/10 measures for them (2026-10-16)
+
+Reply to the progress e-mail, on "a ring of 1,024 keeping only 128 buffers posted measures like a ring of 128": **"How many cores?"** and **"How is the shared access to the mempool done?"** Neither was in the e-mail. The second is the real one: if every queue draws from one shared pool, did the design trade shRing's shared head for another shared hot spot?
+
+**Answers, from the source:**
+
+- **Cores:** 8 lcores (1–8), one Rx queue each, one port. 128 per queue is 1,024 posted in total — the same total as shRing-8's one shared ring of 1,024, which is what makes that comparison like for like.
+- **The mempool is untouched.** It is l3fwd's stock `rte_mempool` (one per port and socket, `examples/l3fwd/main.c:906`, default ops `ring_mp_mc`), which every queue already shares under privRing (§18.1). Each lcore allocates and frees through a 256-mbuf per-lcore cache with no atomics; only when that cache runs empty or overflows does it move a bulk to or from the pool's common ring (lock-free, CAS). The cache is LIFO, so a freed buffer is the next one allocated, still warm. In l3fwd the lcore that receives a packet also frees it on Tx completion, so each cache should refill itself and the common ring should be touched rarely.
+- **What the design adds that is shared is the credit counter, not buffers:** `priv->fill_pool` (one int per port, CAS in `mlx5_fill_pool_take`) and one `fill_debt` per queue for the lottery, both touched only when a budget changes. Per burst, one relaxed load of the queue's own `fill_debt`. The read and post indices of a queue are written only by its lcore (AF_XDP's single-producer FILL ring, §18.4).
+- **Not measured until now:** how often the lcores actually reach the common ring.
+
+**Instrumentation, fork `9601a7530` (l3fwd only, the driver is unchanged):**
+
+- `MEMPOOL <pool>: common ring get=<n> put=<n> objects, cache 256 per lcore, <n> in pool` at exit: how far the ring's consumer and producer tails moved between launching the lcores and stopping them — every object that went through the common ring, in either direction, read without a `RTE_LIBRTE_MEMPOOL_DEBUG` build (which would add cookie checks to every get and put). Printed before the ports stop, so the posted buffers handed back at stop are not counted. Wraps at 2³² per direction.
+- `CYCLES lcore <n>: pkts=… rx_cyc/pkt=… fwd_cyc/pkt=… tsc_mhz=…` per lcore: TSC cycles per packet in the Rx burst alone (the driver path: credits, backlog search and posting are inside it) and from the Rx burst through lookup and Tx enqueue, both over non-empty bursts only, so idle polling and the gaps between traffic windows do not count. Packets and cycles are reset together with l3fwd's own counters, so both cover the same span on each lcore.
+- `harness/sweep.sh` adds both to each run's block in `summary.txt`, plus one line: packet-weighted cycles per packet and **common-ring objects per packet**.
+- Checked here on `net_null` (no NIC, offload temporarily off): `get=288 put=0` — exactly the first refill of an empty cache (32 + 256) and nothing after it, ~18 Rx cycles per packet.
+
+**Plan for 21/10, in order:**
+
+1. `git pull` + `ninja` on the dut (fork `9601a7530`), `git pull` of `/local/repository`; check `node-setup.sh`'s interrupt routing message after boot (§19.17 item 7).
+2. The trade-off sweep of §19.19 (`harness/sweeps/tradeoff.txt`), if the 2026-10-14 run did not finish or its `summary.txt` was not kept. Every run now also yields cycles and mempool lines.
+3. `harness/sweeps/pathcost.txt`: privRing-1024, privRing-128, fill-128, dyn-128, shRing-8, then the same in reverse — balanced, 98%, 2 × 60 s. Answers the advisor with numbers (common-ring objects per packet for each system; ~0 is the claim) and gives cycles per packet (§19.17 item 5) and two more balanced repetitions of each system (§19.18).
+4. More balanced repetitions of dyn-128 and shRing-8 back to back if time remains, for the DRAM-write spread of §19.18.
+
+**What would change the story:** common-ring traffic of the same order as the packet count would mean the caches are not absorbing it, and the design would share a hot structure after all — at which point the per-queue FILL position no longer removes cross-core synchronisation, it only moves it. A difference between systems would point at the Tx side (buffers freed by one lcore's Tx completion while another lcore allocates), not at the credits.

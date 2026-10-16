@@ -1,0 +1,15 @@
+# Cost of the path and shared-mempool traffic (CLAUDE.md 19.20), balanced load.
+# Every system once, then again in reverse order, so drift between runs shows.
+# Needs the fork at 9601a7530 or later: l3fwd prints CYCLES and MEMPOOL lines.
+#
+# label               system         window_ms  headroom_pct  [extra rate_sweep.py args]
+privring-1024         privring-1024  -          -
+privring-128          privring-128   -          -
+fill-128              fill-128       -          -
+dyn-128               dyn-128        -          -
+shring-8              shring-8       -          -
+shring-8              shring-8       -          -
+dyn-128               dyn-128        -          -
+fill-128              fill-128       -          -
+privring-128          privring-128   -          -
+privring-1024         privring-1024  -          -

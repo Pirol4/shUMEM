@@ -118,6 +118,21 @@ summarize() {
              }' "$out"
         grep -oE 'contention [0-9]+' "$out" | tail -1 | sed 's/^/   /' || true
         grep -oE 'Rx queue [0-9]+: FILL credits:.*' "$out" | sed 's/^/   /' || true
+        # Cost of the path and the mempool's shared ring (fork 9601a7530 on).
+        grep -oE 'MEMPOOL .*' "$out" | sed 's/^/   /' || true
+        awk '/^CYCLES lcore/ {
+                 split($4, a, "="); split($5, r, "="); split($6, f, "=")
+                 n += a[2]; rx += a[2] * r[2]; fw += a[2] * f[2]
+             }
+             /^MEMPOOL .*common ring/ {
+                 for (i = 1; i <= NF; i++)
+                     if ($i ~ /^(get|put)=/) { split($i, g, "="); ring += g[2] }
+             }
+             END {
+                 if (n > 0)
+                     printf "   cycles/pkt over %d pkts: rx %.1f  fwd %.1f  common-ring objects/pkt %.5f\n",
+                            n, rx / n, fw / n, ring / n
+             }' "$out"
         "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
     } | tee -a "$SUMMARY"
 }
