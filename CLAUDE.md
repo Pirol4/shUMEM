@@ -1352,7 +1352,9 @@ Reply to the progress e-mail, on "a ring of 1,024 keeping only 128 buffers poste
 |---|---|---|---|
 | `stall.txt` | 15 | ~18 min | n = 5 for the two stall rows of §19.18; first two-borrower measurement (§19.17 item 4) |
 | `pathcost.txt` | 10 | ~26 min | the advisor's mempool question (§19.20), cycles per packet, two balanced repetitions of every system |
-| `tradeoff.txt` | 9 | ~23 min | the loss–DRAM curve (§19.19) |
+| `tradeoff.txt` | 9 | ~23 min | the loss–DRAM curve (§19.19; the 2026-10-14 session ran out of machine time before it started, so nothing of it exists yet) |
+
+**The reservation is a full week from 21/10**, so the three batteries are day one, not the whole session.
 
 **Runbook, in order.** Every command on the dut, from `/local/repository`, inside tmux, as your own user unless it says sudo.
 
