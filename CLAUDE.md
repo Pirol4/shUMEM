@@ -1444,3 +1444,16 @@ Three points, verbatim in substance:
 - **Mempool shards:** one `rte_mempool` per (port, group of cores) in l3fwd instead of per (port, socket), each Rx queue set up with its group's pool. An mbuf always returns to its own pool (`mbuf->pool`), so a free by another group's core goes through that core's cache *of that pool* and contends only on that pool's ring. The posted working set is unchanged; each shard needs enough mbufs for its group's maximum posted budget plus caches and Tx rings.
 - **Cache-line hygiene (RadixVM's disjoint-lines rule):** `fill_debt`, which other lcores CAS on reclaim, sits in `struct mlx5_rxq_data` next to `fill_polls` / `fill_full_run`, which the owner writes every burst (`mlx5_rx.h:166-175`): give the cross-core fields their own cache line.
 - **A test that makes the global mempool hot**, without which the shards cannot be evaluated: Tx on a different lcore than Rx (pipeline), or a small per-lcore cache (e.g. 32 or 0), more queues; measure common-ring objects per packet and cycles per packet with one pool against shards.
+
+**Latency in the 2026-10-19 runs** (TRex's 1000 pps latency stream, which always lands on queue 0 — §17.3; mean/max µs; lost packets do not count; stock TRex, ~10 µs resolution, §16.1):
+
+| test | fill-128 | shRing-8 | dyn-128 |
+|---|---|---|---|
+| balanced, every window | 31–34 / 53–62 | 32–35 / 52–91 | 31–36 / 52–59 |
+| cold stall (queue 0 not stalled) | 31–33 / 49–56 | 33 / 53–55 | 31 / 55–57 |
+| hot-core stall (queue 0 is the stalled one) | 20–21 / **41–54** | 23–25 / **90–98** | 23–24 / **166–182** |
+| two borrowers (queue 0 hot, not stalled) | 21 / 36 | 21 / 42 | 21 / **126** |
+
+- **Mean latency is a tie everywhere.** Stalls are 1% of the time, and every system holds 21–36 µs on average.
+- **Under a stall the maximum is the time the posted buffers hold, which is the other side of losing fewer packets.** A packet that finds a buffer during a 1 ms stall waits until the core is back; how long the queue's buffers last at its rate bounds that wait: fill-128 128 / 4.5 per µs ≈ 28 µs (+~20 base → 41–54), shRing 1,024 / 8 per µs ≈ 127 µs (→ 90–98), dyn-128 ~800 / 4.5 ≈ 178 µs (→ 166–182). Each saved packet waited instead of being dropped. Worth stating in the thesis as a trade-off, not hiding: credits buy fewer drops with a longer tail for the packets saved.
+- **Two borrowers' 126 µs max on an unstalled queue is unexplained** (one packet of ~30 k). Hypothesis: queue 3, holding ~500 packets after each stall, releases them as one Tx burst onto the same 100 Gb/s wire (~60 µs of wire time) ahead of queue 0's packets. Unchecked.
