@@ -165,9 +165,16 @@ echo "system=$SYSTEM pci=$PCI devargs=$DEVARGS nb_rxd=$NB_RXD tgen_mac=$TGEN_MAC
 echo "log: $LOG"
 
 if [[ -n "${PCM_LABEL:-}" ]]; then
-    [[ ! -e "${EXP_DIR:-/mydata/exp}/pcm-mem_$PCM_LABEL.csv" ]] \
-        || die "pcm-mem_$PCM_LABEL.csv exists; pick another PCM_LABEL"
-    "$SCRIPT_DIR/pcm_memory.sh" "$PCM_LABEL" &
+    # PCM_TOOL=pcie records PCIe/DDIO counters instead of DRAM bandwidth; the
+    # two cannot share the uncore in one run.
+    case "${PCM_TOOL:-memory}" in
+        memory) pcm_script=pcm_memory.sh pcm_csv=pcm-mem_$PCM_LABEL.csv ;;
+        pcie)   pcm_script=pcm_pcie.sh pcm_csv=pcm-pcie_$PCM_LABEL.csv ;;
+        *)      die "PCM_TOOL=$PCM_TOOL: want memory or pcie" ;;
+    esac
+    [[ ! -e "${EXP_DIR:-/mydata/exp}/$pcm_csv" ]] \
+        || die "$pcm_csv exists; pick another PCM_LABEL"
+    "$SCRIPT_DIR/$pcm_script" "$PCM_LABEL" &
     PCM_PID=$!
     # Ctrl-C normally reaches PCM directly (it installs its own SIGINT
     # handler); TERM covers every other way this script can end.

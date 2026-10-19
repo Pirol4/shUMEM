@@ -20,6 +20,7 @@
 #                            <us> every <ms> (CLAUDE.md 17.10)
 #   cache=<n>                l3fwd's per-lcore mempool cache (default 256,
 #                            0 = none): every get/put through the common ring
+#   pcm=pcie                 record pcm-pcie (DDIO) instead of pcm-memory
 # e.g. `--hot-share 0.5` among the extra args makes queue 0 hot (17.7).
 #
 # Environment:
@@ -209,10 +210,14 @@ summarize() {
         echo "== $label ($(date '+%F %T'))"
         echo "   run: $run"
         grep -E ' tx=[0-9]+ rx=[0-9]+ ' "$out" | sed 's/^/   /' || true
+        grep -E '^NDR ' "$out" | sed 's/^/   /' || true
         awk '/ \[[0-9]+\] = -?[0-9]+$/ { v[$1] = $NF }
              END {
-                 printf "   rx_missed_errors=%s  rx_phy_packets=%s  tx_phy_packets=%s\n",
-                        v["rx_missed_errors"], v["rx_phy_packets"], v["tx_phy_packets"]
+                 # shRing drops some packets without counting them as missed
+                 # (19.24): rx_phy - rx_good is the dut-side loss that always holds.
+                 printf "   rx_missed_errors=%s  rx_phy_packets=%s  rx_good_packets=%s  phy-good=%s  tx_phy_packets=%s\n",
+                        v["rx_missed_errors"], v["rx_phy_packets"], v["rx_good_packets"],
+                        v["rx_phy_packets"] - v["rx_good_packets"], v["tx_phy_packets"]
                  line = "   per queue rx:"
                  for (q = 0; q < 8; q++) line = line " " v["rx_q" q "_packets"]
                  print line
@@ -243,13 +248,15 @@ summarize() {
 run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
-    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" arg
+    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory arg
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
             duration=*) duration="${arg#duration=}" ;;
             stall=*)    stall="${arg#stall=}"
                         [[ "$stall" =~ ^[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core>:<us>:<ms>" ;;
+            pcm=*)      pcm="${arg#pcm=}"
+                        [[ "$pcm" == memory || "$pcm" == pcie ]] || die "$label: bad $arg, want pcm=memory|pcie" ;;
             cache=*)    cache="${arg#cache=}"
                         [[ "$cache" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want cache=<n>" ;;
             *)          extra+=("$arg") ;;
@@ -261,6 +268,7 @@ run_one() {
     [[ "$window" == - ]] || env_args+=("FILL_WINDOW_MS=$window")
     [[ "$headroom" == - ]] || env_args+=("FILL_HEADROOM=$headroom")
     [[ -z "$cache" ]] || env_args+=("L3FWD_MEMPOOL_CACHE=$cache")
+    env_args+=("PCM_TOOL=$pcm")
 
     log "$label: starting $system ${env_args[*]:-}"
     # Append mode for every writer of $out: l3fwd's final counters would
@@ -310,7 +318,7 @@ run_one() {
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }
