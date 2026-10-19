@@ -54,7 +54,8 @@ check() {
         || fail "isolated CPUs '${isolated:-none}', want $LCORES (dmesg | grep -i housekeep)"
     [[ "$smt" == 0 ]] && ok "hyperthreading off" || fail "hyperthreading active ($smt)"
     (( huge1g >= 16 )) && ok "$huge1g x 1 GiB hugepages" || fail "$huge1g x 1 GiB hugepages, want 16"
-    lsmod | grep -q '^msr ' && ok "msr module loaded (PCM)" || fail "msr module not loaded: sudo modprobe msr"
+    # What PCM opens; msr may be built in, and then lsmod does not list it.
+    [[ -e /dev/cpu/0/msr ]] && ok "MSR device present (PCM)" || fail "no /dev/cpu/0/msr: sudo modprobe msr"
     return "$bad"
 }
 
