@@ -111,8 +111,18 @@ print("; ".join(hits))
 PY
 )"
 [[ -z "$lcore_irqs" ]] || warn "interrupts firing on the lcores: $lcore_irqs — move them (setup/node-setup.sh, CLAUDE.md 19.14)"
+# node-setup.sh routes it to every CPU off the lcores (e.g. 0,9-16,25-31),
+# not to CPU 0 alone, so warn only when the list reaches lcores 1-8.
 acpi_cpus="$(cat /proc/irq/9/smp_affinity_list 2>/dev/null || echo '?')"
-[[ "$acpi_cpus" == 0 ]] || warn "ACPI IRQ 9 is on CPUs $acpi_cpus, not 0: lcore 1 will pause twice a second (CLAUDE.md 19.9)"
+acpi_on_lcores="$(python3 -c '
+import sys
+cpus = set()
+for part in sys.argv[1].split(","):
+    lo, _, hi = part.partition("-")
+    cpus.update(range(int(lo), int(hi or lo) + 1))
+print(",".join(str(c) for c in sorted(cpus & set(range(1, 9)))))
+' "$acpi_cpus" 2>/dev/null || echo '?')"
+[[ -z "$acpi_on_lcores" ]] || warn "ACPI IRQ 9 may fire on lcores $acpi_on_lcores (affinity $acpi_cpus): lcore 1 will pause twice a second (CLAUDE.md 19.9)"
 exp_if="$(ip -o -4 addr show | awk '$4 ~ /^10\.10\.1\.1\// {print $2; exit}')"
 if [[ -n "$exp_if" ]] && sudo -n ethtool -a "$exp_if" 2>/dev/null | grep -qE '^(RX|TX):[[:space:]]+on'; then
     warn "pause frames are on on $exp_if (CLAUDE.md 15.5): sudo ethtool -A $exp_if rx off tx off"
