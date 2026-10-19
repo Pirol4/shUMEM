@@ -1,0 +1,75 @@
+# The stall table, n = 5 (CLAUDE.md 19.26): cold core, hot core, two borrowers,
+# for fill-128, shring-8, shringfix-8 (rmp_fix=1) and dyn-128 (reserve 64), plus
+# dyn-128 with reserve=0 (the earlier policy) where the reserve acts. ~85 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+cold-stall_dyn-128           dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8          shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128          fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shringfix-8       shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+hot-stall_dyn-128            dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8           shring-8       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128           fill-128       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shringfix-8        shringfix-8    -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+two-borrowers_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shring-8       shring-8       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+cold-stall_dyn-128_res0      dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 reserve=0
+two-borrowers_dyn-128_res0   dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 reserve=0
+cold-stall_shring-8          shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128          fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shringfix-8       shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_dyn-128           dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+hot-stall_shring-8           shring-8       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128           fill-128       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shringfix-8        shringfix-8    -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_dyn-128            dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+two-borrowers_shring-8       shring-8       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+cold-stall_dyn-128_res0      dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 reserve=0
+two-borrowers_dyn-128_res0   dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 reserve=0
+cold-stall_fill-128          fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shringfix-8       shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_dyn-128           dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8          shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+hot-stall_fill-128           fill-128       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shringfix-8        shringfix-8    -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_dyn-128            dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8           shring-8       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+two-borrowers_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shring-8       shring-8       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+cold-stall_dyn-128_res0      dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 reserve=0
+two-borrowers_dyn-128_res0   dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 reserve=0
+cold-stall_shringfix-8       shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_dyn-128           dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8          shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128          fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+hot-stall_shringfix-8        shringfix-8    -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_dyn-128            dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8           shring-8       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128           fill-128       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+two-borrowers_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shring-8       shring-8       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+cold-stall_dyn-128_res0      dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 reserve=0
+two-borrowers_dyn-128_res0   dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 reserve=0
+cold-stall_dyn-128           dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shring-8          shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_fill-128          fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+cold-stall_shringfix-8       shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+hot-stall_dyn-128            dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shring-8           shring-8       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_fill-128           fill-128       -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+hot-stall_shringfix-8        shringfix-8    -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5
+two-borrowers_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shring-8       shring-8       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+two-borrowers_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5
+cold-stall_dyn-128_res0      dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 reserve=0
+two-borrowers_dyn-128_res0   dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 reserve=0

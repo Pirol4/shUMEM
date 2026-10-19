@@ -1,0 +1,10 @@
+# PCIe/DDIO counters (pcm-pcie -e) under balanced 98% load, one run per system.
+# ~8 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+ddio_privring-1024   privring-1024  -  -  rates=98 duration=30 pcm=pcie
+ddio_privring-128    privring-128   -  -  rates=98 duration=30 pcm=pcie
+ddio_fill-128        fill-128       -  -  rates=98 duration=30 pcm=pcie
+ddio_shring-8        shring-8       -  -  rates=98 duration=30 pcm=pcie
+ddio_shringfix-8     shringfix-8    -  -  rates=98 duration=30 pcm=pcie
+ddio_dyn-128         dyn-128        -  -  rates=98 duration=30 pcm=pcie

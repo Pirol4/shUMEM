@@ -1,0 +1,25 @@
+# Highest rate with loss <= 1e-6 (RFC 2544 style binary search, 10 s trials)
+# per packet size (19.26): shRing saturated at ~19.7 Mpps with 512 B (19.24).
+# ~45 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+ndr1500_privring-128   privring-128   -  -  duration=10 --pkt-size 1500 --search 50,100
+ndr1500_shring-8       shring-8       -  -  duration=10 --pkt-size 1500 --search 50,100
+ndr1500_shringfix-8    shringfix-8    -  -  duration=10 --pkt-size 1500 --search 50,100
+ndr1500_dyn-128        dyn-128        -  -  duration=10 --pkt-size 1500 --search 50,100
+ndr1500_fill-128       fill-128       -  -  duration=10 --pkt-size 1500 --search 50,100
+ndr1024_fill-128       fill-128       -  -  duration=10 --pkt-size 1024 --search 50,100
+ndr1024_privring-128   privring-128   -  -  duration=10 --pkt-size 1024 --search 50,100
+ndr1024_shring-8       shring-8       -  -  duration=10 --pkt-size 1024 --search 50,100
+ndr1024_shringfix-8    shringfix-8    -  -  duration=10 --pkt-size 1024 --search 50,100
+ndr1024_dyn-128        dyn-128        -  -  duration=10 --pkt-size 1024 --search 50,100
+ndr512_shringfix-8     shringfix-8    -  -  duration=10 --pkt-size 512 --search 50,100
+ndr512_dyn-128         dyn-128        -  -  duration=10 --pkt-size 512 --search 50,100
+ndr512_fill-128        fill-128       -  -  duration=10 --pkt-size 512 --search 50,100
+ndr512_privring-128    privring-128   -  -  duration=10 --pkt-size 512 --search 50,100
+ndr512_shring-8        shring-8       -  -  duration=10 --pkt-size 512 --search 50,100
+ndr256_shring-8        shring-8       -  -  duration=10 --pkt-size 256 --search 50,100
+ndr256_shringfix-8     shringfix-8    -  -  duration=10 --pkt-size 256 --search 50,100
+ndr256_dyn-128         dyn-128        -  -  duration=10 --pkt-size 256 --search 50,100
+ndr256_fill-128        fill-128       -  -  duration=10 --pkt-size 256 --search 50,100
+ndr256_privring-128    privring-128   -  -  duration=10 --pkt-size 256 --search 50,100

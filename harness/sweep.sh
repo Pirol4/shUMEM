@@ -21,6 +21,9 @@
 #   cache=<n>                l3fwd's per-lcore mempool cache (default 256,
 #                            0 = none): every get/put through the common ring
 #   pcm=pcie                 record pcm-pcie (DDIO) instead of pcm-memory
+#   ops=<driver>             l3fwd's mempool driver (ring_mp_mc, stack, lf_stack)
+#   groups=<G>               G mbuf pools (l3fwd) and, for dyn-*, G credit pools
+#   reserve=<R>              dyn-* credit pool reserve (default 64; 0 = earlier policy)
 # e.g. `--hot-share 0.5` among the extra args makes queue 0 hot (17.7).
 #
 # Environment:
@@ -79,8 +82,10 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
        On tgen: append that line to ~/.ssh/authorized_keys2 (authorized_keys is rewritten by CloudLab)"
 "${SSH[@]}" "pgrep -f '_t-rex-6[4]'" >/dev/null || die "TRex is not running on $TGEN_HOST (cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check)"
 
-# The build must have l3fwd's MEMPOOL and CYCLES lines (fork 9601a7530).
-grep -q "common ring get" "$L3FWD_BIN" 2>/dev/null || die "$L3FWD_BIN is missing or older than fork 9601a7530:
+# The build must have the knobs the sweep files use.
+# fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5.
+grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "$L3FWD_BIN" \
+    || die "$L3FWD_BIN is missing or older than fork a8a7459be:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
 
 # Not fatal, but every number of CLAUDE.md 19.12-19.18 assumes them.
@@ -248,7 +253,7 @@ summarize() {
 run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
-    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory arg
+    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory ops="" groups="" reserve="" arg
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
@@ -257,6 +262,12 @@ run_one() {
                         [[ "$stall" =~ ^[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core>:<us>:<ms>" ;;
             pcm=*)      pcm="${arg#pcm=}"
                         [[ "$pcm" == memory || "$pcm" == pcie ]] || die "$label: bad $arg, want pcm=memory|pcie" ;;
+            ops=*)      ops="${arg#ops=}"
+                        [[ "$ops" =~ ^[a-z_]+$ ]] || die "$label: bad $arg" ;;
+            groups=*)   groups="${arg#groups=}"
+                        [[ "$groups" =~ ^[1-8]$ ]] || die "$label: bad $arg, want groups=1..8" ;;
+            reserve=*)  reserve="${arg#reserve=}"
+                        [[ "$reserve" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want reserve=<n>" ;;
             cache=*)    cache="${arg#cache=}"
                         [[ "$cache" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want cache=<n>" ;;
             *)          extra+=("$arg") ;;
@@ -269,6 +280,9 @@ run_one() {
     [[ "$headroom" == - ]] || env_args+=("FILL_HEADROOM=$headroom")
     [[ -z "$cache" ]] || env_args+=("L3FWD_MEMPOOL_CACHE=$cache")
     env_args+=("PCM_TOOL=$pcm")
+    [[ -z "$ops" ]] || env_args+=("L3FWD_MEMPOOL_OPS=$ops")
+    [[ -z "$groups" ]] || env_args+=("L3FWD_MEMPOOL_GROUPS=$groups" "FILL_GROUPS=$groups")
+    [[ -z "$reserve" ]] || env_args+=("FILL_RESERVE=$reserve")
 
     log "$label: starting $system ${env_args[*]:-}"
     # Append mode for every writer of $out: l3fwd's final counters would
@@ -318,7 +332,7 @@ run_one() {
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }

@@ -1,0 +1,34 @@
+# The shRing wedge (19.24-19.25): 15 cold stalls each for the published code and
+# rmp_fix=1. If the race is the cause, shringfix-8 never wedges. ~35 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8      shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100

@@ -1,0 +1,15 @@
+# Cold-core stall length 250 us - 2 ms (as 17.11, now with the credits). ~15 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+stall250_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:250:100
+stall250_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:250:100
+stall250_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:250:100
+stall500_dyn-128        dyn-128        -  -  rates=98 duration=30 stall=4:500:100
+stall500_fill-128       fill-128       -  -  rates=98 duration=30 stall=4:500:100
+stall500_shringfix-8    shringfix-8    -  -  rates=98 duration=30 stall=4:500:100
+stall1000_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:1000:100
+stall1000_dyn-128       dyn-128        -  -  rates=98 duration=30 stall=4:1000:100
+stall1000_fill-128      fill-128       -  -  rates=98 duration=30 stall=4:1000:100
+stall2000_dyn-128       dyn-128        -  -  rates=98 duration=30 stall=4:2000:100
+stall2000_fill-128      fill-128       -  -  rates=98 duration=30 stall=4:2000:100
+stall2000_shringfix-8   shringfix-8    -  -  rates=98 duration=30 stall=4:2000:100

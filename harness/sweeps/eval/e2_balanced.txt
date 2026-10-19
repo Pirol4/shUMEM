@@ -1,0 +1,22 @@
+# Balanced load, 98%, start-up and steady-state windows, n = 3 (19.26): loss,
+# DRAM write, cycles per packet, common-ring objects per packet. ~47 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+balanced_privring-1024   privring-1024  -  -  rates=98,98 duration=60
+balanced_privring-128    privring-128   -  -  rates=98,98 duration=60
+balanced_fill-128        fill-128       -  -  rates=98,98 duration=60
+balanced_shring-8        shring-8       -  -  rates=98,98 duration=60
+balanced_shringfix-8     shringfix-8    -  -  rates=98,98 duration=60
+balanced_dyn-128         dyn-128        -  -  rates=98,98 duration=60
+balanced_fill-128        fill-128       -  -  rates=98,98 duration=60
+balanced_shring-8        shring-8       -  -  rates=98,98 duration=60
+balanced_shringfix-8     shringfix-8    -  -  rates=98,98 duration=60
+balanced_dyn-128         dyn-128        -  -  rates=98,98 duration=60
+balanced_privring-1024   privring-1024  -  -  rates=98,98 duration=60
+balanced_privring-128    privring-128   -  -  rates=98,98 duration=60
+balanced_shringfix-8     shringfix-8    -  -  rates=98,98 duration=60
+balanced_dyn-128         dyn-128        -  -  rates=98,98 duration=60
+balanced_privring-1024   privring-1024  -  -  rates=98,98 duration=60
+balanced_privring-128    privring-128   -  -  rates=98,98 duration=60
+balanced_fill-128        fill-128       -  -  rates=98,98 duration=60
+balanced_shring-8        shring-8       -  -  rates=98,98 duration=60

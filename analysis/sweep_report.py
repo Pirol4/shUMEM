@@ -31,7 +31,8 @@ DRAM_LINE = re.compile(r"^\s+DRAM window (\d+) .*: n=(\d+) read=([\d.]+) write=(
 STALL_LINE = re.compile(r"^\s+stall_core: (\d+) stalls, mean (\d+) us")
 CONTENTION_LINE = re.compile(r"^\s+contention (\d+)")
 
-FIELDS = ["label", "date", "system", "window_ms", "headroom_pct", "stall", "extra",
+FIELDS = ["label", "date", "system", "window_ms", "headroom_pct", "stall", "cache", "pcm",
+          "ops", "groups", "reserve", "extra",
           "window", "rate_pct", "tx_pkts", "loss_pkts", "loss_per_min", "lat_avg_us",
           "lat_max_us", "dram_n", "dram_read_mb_s", "dram_write_mb_s", "rx_cyc_per_pkt",
           "fwd_cyc_per_pkt", "ring_objs_per_pkt", "rx_missed_run", "contention_run",
@@ -45,6 +46,7 @@ STYLE = {
     "shring-8": ("#1baf7a", "D"),
     "fill-128": ("#eda100", "^"),
     "dyn-128": ("#e87ba4", "o"),
+    "shringfix-8": ("#7a5bd6", "d"),
 }
 INK, INK_MUTED, GRID = "#1f1f1e", "#6b6a63", "#e4e3dc"
 

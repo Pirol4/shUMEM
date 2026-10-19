@@ -1,0 +1,27 @@
+# The advisor's question (19.23-19.24): the shared mempool with a small cache,
+# FIFO ring against LIFO stack, one pool against 4 groups (mbuf pools and, for
+# dyn-128, credit pools). Separates contention (groups) from locality (stack).
+# ~25 min.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+mempool_c256_ring_g1_privring-128   privring-128   -  -  rates=98 duration=30 cache=256
+mempool_c256_ring_g1_shring-8       shring-8       -  -  rates=98 duration=30 cache=256
+mempool_c256_ring_g1_dyn-128        dyn-128        -  -  rates=98 duration=30 cache=256
+mempool_c32_ring_g1_shring-8        shring-8       -  -  rates=98 duration=30 cache=32
+mempool_c32_ring_g1_dyn-128         dyn-128        -  -  rates=98 duration=30 cache=32
+mempool_c32_ring_g1_privring-128    privring-128   -  -  rates=98 duration=30 cache=32
+mempool_c32_stack_g1_dyn-128        dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack
+mempool_c32_stack_g1_privring-128   privring-128   -  -  rates=98 duration=30 cache=32 ops=stack
+mempool_c32_stack_g1_shring-8       shring-8       -  -  rates=98 duration=30 cache=32 ops=stack
+mempool_c32_ring_g4_privring-128    privring-128   -  -  rates=98 duration=30 cache=32 groups=4
+mempool_c32_ring_g4_shring-8        shring-8       -  -  rates=98 duration=30 cache=32 groups=4
+mempool_c32_ring_g4_dyn-128         dyn-128        -  -  rates=98 duration=30 cache=32 groups=4
+mempool_c32_stack_g4_shring-8       shring-8       -  -  rates=98 duration=30 cache=32 ops=stack groups=4
+mempool_c32_stack_g4_dyn-128        dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=4
+mempool_c32_stack_g4_privring-128   privring-128   -  -  rates=98 duration=30 cache=32 ops=stack groups=4
+mempool_c0_stack_g4_dyn-128         dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=4
+mempool_c0_stack_g4_privring-128    privring-128   -  -  rates=98 duration=30 cache=0 ops=stack groups=4
+mempool_c0_stack_g4_shring-8        shring-8       -  -  rates=98 duration=30 cache=0 ops=stack groups=4
+mempool_c0_ring_g4_privring-128     privring-128   -  -  rates=98 duration=30 cache=0 groups=4
+mempool_c0_ring_g4_shring-8         shring-8       -  -  rates=98 duration=30 cache=0 groups=4
+mempool_c0_ring_g4_dyn-128          dyn-128        -  -  rates=98 duration=30 cache=0 groups=4

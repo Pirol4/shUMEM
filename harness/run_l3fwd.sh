@@ -25,6 +25,13 @@
 # backlog, default 150) set the other two knobs of the policy, for the
 # loss-against-DRAM sweep (CLAUDE.md 19.19):
 #   sudo FILL_WINDOW_MS=2000 FILL_HEADROOM=200 harness/run_l3fwd.sh dyn-128
+# FILL_GROUPS=<G> splits the credits into G pools (fill_groups, 19.25) and
+# FILL_RESERVE=<R> sets the pool reserve (fill_reserve, default 64 since fork
+# 70849f04d; 0 gives the earlier policy). l3fwd's own knobs pass through the
+# environment: L3FWD_MEMPOOL_CACHE, L3FWD_MEMPOOL_OPS, L3FWD_MEMPOOL_GROUPS.
+#
+# shringfix-8 is shring-8 with rmp_fix=1: its head advance serialised, which
+# removes the race that can stop the shared ring for good (19.25).
 #
 # privring-<N> takes any power-of-two ring size from 64 to 8192, for sweeping
 # the I/O working set (CLAUDE.md 17.4). l3fwd sizes its mbuf pool from N.
@@ -64,7 +71,7 @@ FILL_RING_SIZE=1024
 EAL_EXTRA=()
 
 usage() {
-    echo "Usage: sudo $0 <privring-<N>|shring-8|fill-<B>[-<N>]|dyn-<E>[-<F>]>" >&2
+    echo "Usage: sudo $0 <privring-<N>|shring-8|shringfix-8|fill-<B>[-<N>]|dyn-<E>[-<F>]>" >&2
     echo "       N: power of two, 64..8192;  B: 1..N (N defaults to $FILL_RING_SIZE for fill)" >&2
     echo "       E: 1..$FILL_RING_SIZE;  F: 1..E (default 32)" >&2
     exit 1
@@ -113,13 +120,17 @@ select_system() {
             [[ -z "$floor" ]] || (( floor <= entitled )) || usage
             [[ -z "${FILL_WINDOW_MS:-}" || "$FILL_WINDOW_MS" =~ ^[0-9]+$ ]] || usage
             [[ -z "${FILL_HEADROOM:-}" || "$FILL_HEADROOM" =~ ^[0-9]+$ ]] || usage
+            [[ -z "${FILL_GROUPS:-}" || "$FILL_GROUPS" =~ ^[1-8]$ ]] || usage
+            [[ -z "${FILL_RESERVE:-}" || "$FILL_RESERVE" =~ ^[0-9]+$ ]] || usage
             DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor}"
             DEVARGS+="${FILL_WINDOW_MS:+,fill_window_ms=$FILL_WINDOW_MS}${FILL_HEADROOM:+,fill_headroom=$FILL_HEADROOM}"
+            DEVARGS+="${FILL_GROUPS:+,fill_groups=$FILL_GROUPS}${FILL_RESERVE:+,fill_reserve=$FILL_RESERVE}"
             DEVARGS+=",$COMMON_DEVARGS"
             NB_RXD=$FILL_RING_SIZE
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
         # One RMP of nb_rxd entries shared by all NB_QUEUES queues.
         shring-8)      DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,$COMMON_DEVARGS"; NB_RXD=1024 ;;
+        shringfix-8)   DEVARGS="rmp_en=1,rqs_per_rmp=$NB_QUEUES,rmp_fix=1,$COMMON_DEVARGS"; NB_RXD=1024 ;;
         *) usage ;;
     esac
 }

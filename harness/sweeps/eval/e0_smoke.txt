@@ -1,0 +1,12 @@
+# Smoke test of the tuned node and the new code (CLAUDE.md 19.26), ~10 min.
+# Every check here is cheap and every later battery depends on it.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+smoke_privring-128            privring-128   -  -  rates=10 duration=10
+smoke_shring-8                shring-8       -  -  rates=10 duration=10
+smoke_shringfix-8             shringfix-8    -  -  rates=98 duration=10 stall=4:1000:100
+smoke_fill-128                fill-128       -  -  rates=10 duration=10
+smoke_dyn-128                 dyn-128        -  -  rates=98 duration=10 stall=4:1000:100
+smoke_dyn-128_groups2_stack   dyn-128        -  -  rates=50 duration=10 groups=2 ops=stack
+smoke_dyn-128_move            dyn-128        -  -  rates=50 duration=20 --hot-share 0.5 --hot-move 5
+smoke_dyn-128_ndr             dyn-128        -  -  duration=5 --search 90,100 --resolution 5
