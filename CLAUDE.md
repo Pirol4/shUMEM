@@ -1457,3 +1457,41 @@ Three points, verbatim in substance:
 - **Mean latency is a tie everywhere.** Stalls are 1% of the time, and every system holds 21–36 µs on average.
 - **Under a stall the maximum is the time the posted buffers hold, which is the other side of losing fewer packets.** A packet that finds a buffer during a 1 ms stall waits until the core is back; how long the queue's buffers last at its rate bounds that wait: fill-128 128 / 4.5 per µs ≈ 28 µs (+~20 base → 41–54), shRing 1,024 / 8 per µs ≈ 127 µs (→ 90–98), dyn-128 ~800 / 4.5 ≈ 178 µs (→ 166–182). Each saved packet waited instead of being dropped. Worth stating in the thesis as a trade-off, not hiding: credits buy fewer drops with a longer tail for the packets saved.
 - **Two borrowers' 126 µs max on an unstalled queue is unexplained** (one packet of ~30 k). Hypothesis: queue 3, holding ~500 packets after each stall, releases them as one Tx burst onto the same 100 Gb/s wire (~60 µs of wire time) ahead of queue 0's packets. Unchecked.
+
+&nbsp;
+
+### 19.24 Diagnostics before the next design round (2026-10-19 evening, fork `17317a1ba`, `harness/sweeps/diag.txt`)
+
+Plan agreed with the user: diagnose → change the code and the environment → evaluate once, on the final setup, from 21/10 (the advisor's "test after implementing the system"). These 27 runs only decide what to change. Data: `C:\Users\filip\shumem_diag`.
+
+**1. Small packets: shRing's Rx cost caps its throughput** (balanced, 20 s per rate; TSC 2,400 MHz):
+
+| 512 B (line rate 23.5 Mpps) | 50% | 75% | 90% | 98% | Rx / fwd cyc per pkt |
+|---|---|---|---|---|---|
+| privRing-128 loss | 125 | 116 | 293 | 320 | 266 / 413 |
+| shRing-8 loss | 1,083 | 2,166 | **25.4 M (6.1%)** | **62.7 M (13.7%)** | 792 / 917 |
+| dyn-128 loss | 255 | 0 | 0 | 356 | 254 / 386 |
+
+- shRing received exactly 394.3 M packets in both the 90% and the 98% window: it **saturates at ~19.7 Mpps** (2.46 Mpps per lcore = 975 cycles per packet available, its forwarding path takes ~917 plus polling). Latency jumps to 98 µs there (queues full). At 256 B it delivered 22.15 Mpps of the 22.3 offered at 50% (0.75% lost) and nothing was lost at 25 and 40%.
+- privRing-128 and dyn-128 take every rate offered, up to 23 Mpps, with ~400 cycles per forwarded packet: their limit (~48 Mpps by the same arithmetic) was not reached. **The 3× Rx cost of §19.22 becomes throughput**: at 512 B shRing tops out ~15% below line rate where the credits path does not.
+- **shRing's small-packet drops are invisible to the dut's drop counters:** 88.2 M packets counted in `rx_phy_packets` and not in `rx_good_packets`, while `rx_missed_errors` says 14 k and `rx_out_of_buffer` / `rx_phy_discard_packets` 0. Under stalls its drops *do* show in `rx_missed_errors`. Count loss from TRex or `rx_phy_packets − rx_good_packets`, never from `rx_missed_errors` alone.
+- DRAM write is idle-level (~2 MB/s) for every system at 512 and 256 B: buffers of that size stay inside DDIO.
+
+**2. The shared mempool: the per-lcore cache does two jobs** (1500 B, 98%, 30 s; `L3FWD_MEMPOOL_CACHE`):
+
+| cache per lcore | privRing-128 | shRing-8 | dyn-128 |
+|---|---|---|---|
+| 256 (§19.22): common-ring objects/pkt · Rx cyc · DRAM write | 0 · 302 · 508–519 MB/s | 0 · ~900 · 28–78 | 0 · 297 · 6–55 |
+| **32** | 1.14 · 381 · **7,034 MB/s** (47 lost) | 0.62 · 966 · **4,098** (479 lost) | 0.46 · 334 · **3,094** (184 lost) |
+| **0** | 2.58 · 4,029 · 41.5% lost | 2.02 · 4,586 · 48.7% lost | 2.02 · 3,950 · 40.5% lost |
+
+- **Contention:** with no cache every get and put is a CAS on the common ring shared by 8 lcores; Rx cost goes up 10–13× and every system falls to ~4–5 Mpps. The advisor's concern is real once the cache stops absorbing.
+- **Locality, the less obvious one:** with a cache of 32 the CPU cost rises only 7–26%, but **DRAM write rises 10–500×**. The common ring is FIFO: a buffer that goes back to it comes out again only after the other ~10–18 k free buffers, so the buffers in use cycle through the whole mempool (~20–36 MB, more than the 24 MB LLC) and the posted budget no longer bounds the working set. The per-lcore LIFO cache is what keeps a freed buffer the next one allocated.
+- dyn-128 still touches the common ring least (0.46 objects per packet) and writes least: fewer buffers posted, fewer in flight.
+- **Consequences for the shard design (§19.23):** (a) shards by group of cores cut the contention (a ring shared by `k` lcores instead of 8); (b) the level behind the per-lcore cache must reuse hot buffers first — a LIFO pool (DPDK's `stack` mempool ops) or small per-shard pools — or sharding fixes contention and keeps the DRAM blow-up; (c) the scenario that evaluates it is a small cache or a pipeline (Tx freed on another lcore), with cache 256 run-to-completion as the control.
+
+**3. shRing's wedge reproduces.** 15 identical cold-stall runs (lcore 4, 1 ms every 100 ms, 98%, 30 s): 14 normal (2,128,9xx lost each, the §19.18 figure to 0.1%), and **r10 (19:39) wedged** exactly like 12:36's run: all eight queues stopped together after ~6.2 s (6.26 M packets each), 191.1 M lost (79%), DRAM back to idle at 19:39:17, `contention` 25.5 k, `nombuf` 0. **2 of 17 cold-stall runs today** (none in 5 hot-core, 1 two-borrower, 3 cold on 2026-10-13): roughly one 30 s cold-stall run in 8–13. It is a result, not noise: under shRing a 1 ms stall of one core can stop reception on the whole port for good. Mechanism still to find in the code (§19.22).
+
+**Harness:** `stall_core.py` still lost its report in some runs (a second signal arrived before the handler of the first had finished); its signals now only set a flag that the loop checks.
+
+**What changes before the evaluation (Etapa 1), from these answers:** small-packet throughput (RFC 2544 search at 256/512 B, up to line rate) joins the final batteries as a main result; the shard design must address locality, not only contention, and is evaluated with a small cache and a pipeline mode; the wedge gets a code-reading pass and, if found, a minimal reproduction.

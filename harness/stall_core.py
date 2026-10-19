@@ -49,10 +49,13 @@ def main():
         sys.exit("must run as root (SCHED_FIFO)")
     take_core(args.core)
     # Started in the background by a script (harness/sweep.sh), this process
-    # inherits SIGINT ignored, and Python then never raises KeyboardInterrupt;
-    # take both signals back so the stall count is always printed.
-    signal.signal(signal.SIGINT, signal.default_int_handler)
-    signal.signal(signal.SIGTERM, signal.default_int_handler)
+    # inherits SIGINT ignored; take both signals back. They only set a flag:
+    # pkill -f signals sudo and this process alike and sudo relays it, and a
+    # second signal raised as KeyboardInterrupt used to land inside the final
+    # print and lose the report.
+    stop = []
+    signal.signal(signal.SIGINT, lambda signum, frame: stop.append(signum))
+    signal.signal(signal.SIGTERM, lambda signum, frame: stop.append(signum))
 
     stall_s = args.stall_us / 1e6
     period_s = args.period_ms / 1e3
@@ -62,20 +65,15 @@ def main():
     next_stall = started + period_s
     print("stalling CPU %d for %d us every %g ms; Ctrl-C to stop"
           % (args.core, args.stall_us, args.period_ms), flush=True)
-    try:
-        while True:
-            time.sleep(max(0.0, next_stall - time.perf_counter()))
-            t0 = time.perf_counter()
-            busy_wait(stall_s)
-            stalled_s += time.perf_counter() - t0
-            stalls += 1
-            next_stall += period_s
-    except KeyboardInterrupt:
-        pass
-    # pkill -f signals sudo and this process alike, and sudo relays it: a
-    # second SIGINT used to land inside the print below and lose the report.
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    while not stop:
+        time.sleep(max(0.0, next_stall - time.perf_counter()))
+        if stop:
+            break
+        t0 = time.perf_counter()
+        busy_wait(stall_s)
+        stalled_s += time.perf_counter() - t0
+        stalls += 1
+        next_stall += period_s
     elapsed = time.perf_counter() - started
     print("%d stalls, mean %.0f us, %.2f%% of CPU %d over %.1f s"
           % (stalls, 1e6 * stalled_s / max(stalls, 1), 100 * stalled_s / elapsed,
