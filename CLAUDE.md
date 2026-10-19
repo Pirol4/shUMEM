@@ -1513,9 +1513,47 @@ Plan agreed with the user: diagnose → change the code and the environment → 
 
 Both need an lcore stopped for longer than the ring lasts at a precise point of a few instructions, which is exactly what a 1 ms SCHED_FIFO stall does when it happens to land there — rarely: ~2 of 17 cold-stall runs of 300 stalls each. Neither is the invalid acquire *store* of §15.6 (that changes ordering, not the logic). Not yet proven: a patched shRing (only the CAS winner clears the word, before ringing; the doorbell written monotonically) that stops wedging over ~30 stall runs would confirm it.
 
-**Waiting for the user's decision before code:**
+**Decided by the user the same night (all four as recommended) and implemented — see 19.26.** The options as they were put:
 
 - **(a) Mempool shards with LIFO reuse (§19.23–19.24).** Two independent knobs in l3fwd, so their effects can be told apart: `L3FWD_MEMPOOL_OPS=stack` (DPDK's lock-based `stack` or `lf_stack` mempool driver instead of the FIFO `ring_mp_mc`: a buffer returned to the shared level is the next one out, still hot) and `L3FWD_MEMPOOL_GROUPS=k` (one mempool per group of `k` lcores; each Rx queue set up with its group's pool; an mbuf always returns to its own pool through the freeing lcore's cache of that pool). Then the credits: a pool per group (`priv->fill_pool[g]`), taken from first; a group whose pool is empty takes from another group's. Evaluated with cache 256 (control), 32 and 0: single ring / single stack / shards ring / shards stack, objects per packet, cycles per packet, DRAM write.
 - **(b) Stop charging a stalled borrower for bystanders' pauses (§19.22):** keep a reserve of `R` credits (e.g. 64) in the pool that only a queue below its entitlement may take; a queue growing beyond its entitlement cannot take the last `R`. A bystander's short pause is then served from the reserve instead of a reclaim from the stalled queue.
 - **(c) The lottery (advisor's question):** with equal tickets, and the stalled queue being the largest borrower, a deterministic "largest borrower first" rule picks the same queue the weighted draw picks almost always; switching makes the mechanism simpler to explain and changes no measured result. Recommended; or keep it and show unequal tickets.
 - **(d) shRing baseline:** report the artifact as is and the wedge with its mechanism, and/or add a `rmp_fix=1` devarg with the two fixes above, run as a second shRing baseline (the published system, and the published system without the race).
+
+&nbsp;
+
+### 19.26 Etapa 1 done: the code and the batteries for the final evaluation (2026-10-19 night)
+
+**Fork (`fill-ring`), on top of `100359d1b`:**
+
+- **`70849f04d` net/mlx5.** (1) `fill_groups=G` (1–8, default 1): `priv->fill_pools[8]`, one credit pool per run of consecutive queues (`idx·G/rxqs_n`, l3fwd's lcore order), each on its own cache line; `mlx5_rxq_fill_take()` takes from the queue's group first, then from the others in turn. Credits can migrate between groups (a freed or paid credit goes to the payer's pool), so per-group pool counts can end below zero at teardown; the total is conserved. (2) `fill_reserve=R` (default **64**; 0 = the policy measured until §19.24): in `mlx5_rxq_fill_rebudget()` the part of a raise that keeps the queue within its entitlement may empty a pool, the part beyond it must leave `R` in every pool. (3) `mlx5_rxq_fill_reclaim()` asks the queue holding the most credits beyond its entitlement (ties: the first after the asker); the xorshift lottery and `fill_rng` are gone. (4) `rmp_fix=1` (requires `rmp_en`): `mlx5_rmp_advance_serial()` — trylock on `rmp_shared.advance_lock` (new field, `mlx5_common_devx.h`); the winner, while the next block's bitmap word is all ones, clears it and moves `head` by 64; then one release store of `head`, `rte_io_wmb()`, one doorbell write. A loser counts `contention` and returns. `rmp_fix=0` leaves `mlx5_rx_burst_rmp` exactly as published. Note while reading it: `rmp_shared.head` is a `uint16_t` that the published code CASes through an `int *`; harmless on little-endian (wraps at 65,536, a multiple of the ring) but another sign of the code's state (§15.6).
+- **`a8a7459be` examples/l3fwd.** `L3FWD_MEMPOOL_OPS` (mempool driver: `ring_mp_mc` default, `stack`, `lf_stack` — all three linked) and `L3FWD_MEMPOOL_GROUPS=G` (one mbuf pool per group of consecutive Rx lcores, sized as the group's share of the stock pool plus one ring; each Rx queue set up with its lcore's group pool). Every pool prints a `MEMPOOL` line; a stack pool's shared level cannot be counted (no tails) and is reported as such — its traffic equals a ring pool's under the same cache, which alone decides when the shared level is reached. **For shRing the groups change nothing:** the RMP's buffers are allocated once from queue 0's pool and every replacement comes from the consumed buffer's pool (`seg->pool`), so all of them stay in group 0's pool. Checked on `net_null` (offload switched off for the test only): 1 pool ring, 2 pools stack, 4 pools ring with cache 32 (1.0 common-ring object per packet per pool, as on the NIC).
+- Built here with no new warnings (`maybe-uninitialized` on `idx` in `mlx5_rx_burst_rmp` predates us). **Nothing of it has run on a NIC.**
+
+**Harness (shUMEM `8600b98`):** `run_l3fwd.sh` adds `shringfix-8` and `FILL_GROUPS` / `FILL_RESERVE`; `sweep.sh` adds `ops=`, `groups=` (mbuf pools and, for dyn-*, credit pools), `reserve=` per line, and refuses an l3fwd older than `a8a7459be`. The whole runner was exercised against mocks (sudo, ssh, l3fwd, TRex, stall_core): options reach the environment, `run:`, `NDR` and `stall_core:` lines reach the summary.
+
+**The final batteries, `harness/sweeps/eval/`, run with `harness/run_eval.sh` (each into `/mydata/exp/eval_<e>.csv`), systems alternated in every battery:**
+
+| file | runs | ~time | what |
+|---|---|---|---|
+| `e0_smoke` | 8 | 10 min | tuned node + every new knob once (rmp_fix under a stall, groups+stack, moving hot queue, NDR search). Read before the rest. |
+| `e1_stalls` | 70 | 85 min | cold / hot-core / two borrowers × fill-128, shring-8, shringfix-8, dyn-128, **n = 5**; dyn-128 `reserve=0` on cold and two-borrower |
+| `e2_balanced` | 18 | 47 min | 6 systems × 3, `98,98` × 60 s |
+| `e3_ndr` | 20 | 45 min | NDR (loss ≤ 10⁻⁶, 10 s trials) at 1500 / 1024 / 512 / 256 B × 5 systems |
+| `e4_moving` | 8 | 17 min | hot share 0.5 moving every 5 s, 60 s |
+| `e5_mempool` | 21 | 25 min | cache 256/32/0 × ring/stack × 1/4 groups × privring-128, shring-8, dyn-128 |
+| `e6_stall_len` | 12 | 15 min | cold stall 250 µs – 2 ms × fill-128, shringfix-8, dyn-128 |
+| `e7_ddio` | 6 | 8 min | `pcm=pcie`, balanced, 6 systems |
+| `e8_wedge` | 30 | 35 min | 15 cold stalls each, shring-8 vs shringfix-8 |
+
+**Runbook for the reservation (from 21/10), in order:**
+
+1. CloudLab: **Update the profile**, then instantiate. On both nodes check `git -C /local/repository log --oneline -1` (≥ `8600b98`). If the dut has no `/mydata` (19.22), `sudo mkdir -p /mydata`.
+2. `sudo setup/dev-environment.sh dut` / `… tgen`, then `sudo setup/trex-setup.sh` on the tgen.
+3. **dut only:** `sudo setup/kernel-tuning.sh`, `sudo reboot`, then `setup/kernel-tuning.sh --check` (six OK lines: booted with the parameters, isolated 1-8, nohz_full 1-8, hyperthreading off, 16 × 1 GiB pages, msr loaded). If the node does not come back, the CloudLab console shows why; `--undo` and reboot reverts.
+4. Both nodes: `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp`; dut key into the tgen's `~/.ssh/authorized_keys2`; note `TGEN_MAC` (`grep src_mac /etc/trex_cfg.yaml` on tgen) and `TGEN_HOST` (List View).
+5. tgen, tmux: `cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check`.
+6. dut, tmux, own user, from `/local/repository`: `TGEN_HOST=… TGEN_MAC=… harness/run_eval.sh e0`; send the summary for checking; then `harness/run_eval.sh all` (~4.8 h; can be split per battery across days).
+7. Copy `/mydata/exp` from both nodes and `/mydata/dpdk-research/results` from the dut to `C:\Users\filip\shumem_eval` before ending.
+
+**Predictions to hold the results against** (from §19.18–19.24 and the code changes): shringfix-8 never wedges in e8 and otherwise measures like shring-8 (the stall loss is head-of-line blocking, not the race); with isolated cores dyn-128's balanced loss falls towards 0 (the lcore pauses were the cause, §19.22); reserve 64 cuts dyn-128's cold-stall loss back towards the ~75 k of 2026-10-13 and the two-borrower loss below 13 k; NDR at 512 B: shring-8 ≈ 84% of line rate, the others ≥ 98%; e5: stack restores cache-256-like DRAM write under cache 32, groups cut cycles per packet under cache 0.
