@@ -217,13 +217,14 @@ apply_patches "$VANILLA_DIR" "vanilla DPDK"
 
 section "Configuring hugepages"
 
-python3 "$SHRING_DIR/usertools/dpdk-hugepages.py" -p 2M --setup "$((HUGEPAGE_COUNT * 2))M"
+if [[ "$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages 2>/dev/null || echo 0)" -gt 0 ]]; then
+    log "1 GiB hugepages already reserved at boot (setup/kernel-tuning.sh): leaving them."
+else
+    python3 "$SHRING_DIR/usertools/dpdk-hugepages.py" -p 2M --setup "$((HUGEPAGE_COUNT * 2))M"
+    log "Reserved ${HUGEPAGE_COUNT} x 2MB hugepages (runtime-only; lost on reboot)."
+    log "On the dut, setup/kernel-tuning.sh switches to 1 GiB pages (and isolates the lcores) at the next boot."
+fi
 python3 "$SHRING_DIR/usertools/dpdk-hugepages.py" -s
-
-log "Reserved ${HUGEPAGE_COUNT} x 2MB hugepages (runtime-only; lost on reboot)."
-log "For persistent 1GB hugepages instead, add to /etc/default/grub's GRUB_CMDLINE_LINUX"
-log "and run update-grub + reboot yourself (not automated here):"
-log "  default_hugepagesz=1G hugepagesz=1G hugepages=8"
 
 # --- 5. Build DPDK trees -------------------------------------------------------
 

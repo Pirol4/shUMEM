@@ -11,18 +11,34 @@ HUGEPAGES_2M=8192          # 8192 * 2 MiB = 16 GiB reserved for DPDK mbuf pools
 HUGEPAGES_2M_SYSFS=/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 
 # --- Hugepages -------------------------------------------------------------
-# The kernel can hand back fewer pages than asked when memory is fragmented,
-# which only bites much later as mempool creation failures; surface it now.
-echo "$HUGEPAGES_2M" | sudo tee "$HUGEPAGES_2M_SYSFS" >/dev/null
-allocated=$(cat "$HUGEPAGES_2M_SYSFS")
-if [ "$allocated" -lt "$HUGEPAGES_2M" ]; then
-    echo "node-setup: WARNING wanted $HUGEPAGES_2M hugepages, got $allocated" >&2
+# With 1 GiB pages on the kernel command line (setup/kernel-tuning.sh, dut
+# only) DPDK gets those and nothing else: no 2 MiB pages, and the mount uses
+# the 1 GiB size. Otherwise reserve 2 MiB pages as before. The kernel can hand
+# back fewer pages than asked when memory is fragmented, which only bites much
+# later as mempool creation failures; surface it now.
+HUGEPAGES_1G_SYSFS=/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+huge_1g=$(cat "$HUGEPAGES_1G_SYSFS" 2>/dev/null || echo 0)
+if [ "$huge_1g" -gt 0 ]; then
+    echo 0 | sudo tee "$HUGEPAGES_2M_SYSFS" >/dev/null
+    page_size=1G
+    allocated="$huge_1g x 1 GiB"
+else
+    echo "$HUGEPAGES_2M" | sudo tee "$HUGEPAGES_2M_SYSFS" >/dev/null
+    page_size=2M
+    got=$(cat "$HUGEPAGES_2M_SYSFS")
+    if [ "$got" -lt "$HUGEPAGES_2M" ]; then
+        echo "node-setup: WARNING wanted $HUGEPAGES_2M hugepages, got $got" >&2
+    fi
+    allocated="$got x 2 MiB"
 fi
 
 if ! mountpoint -q "$HUGEPAGE_MOUNT"; then
     sudo mkdir -p "$HUGEPAGE_MOUNT"
-    sudo mount -t hugetlbfs nodev "$HUGEPAGE_MOUNT"
+    sudo mount -t hugetlbfs -o pagesize="$page_size" nodev "$HUGEPAGE_MOUNT"
 fi
+
+# PCM reads the uncore through MSRs; the module does not load itself at boot.
+sudo modprobe msr 2>/dev/null || echo "node-setup: WARNING could not load msr (PCM)" >&2
 
 # --- Steady-state performance -------------------------------------------
 # irqbalance migrates IRQs at runtime and adds jitter to the receive path.
@@ -69,7 +85,9 @@ for cpu in 1 2 3 4 5 6 7 8; do
     done
 done
 housekeeping=""
+# Online CPUs only: with hyperthreading off (nosmt) 16-31 are offline.
 for cpu in $(seq 0 $(( $(nproc --all) - 1 ))); do
+    [ "$(cat /sys/devices/system/cpu/cpu$cpu/online 2>/dev/null || echo 1)" = 1 ] || continue
     case "$busy" in
         *" $cpu "*) ;;
         *) housekeeping="${housekeeping:+$housekeeping,}$cpu" ;;
@@ -87,4 +105,6 @@ else
     echo "node-setup: WARNING no CPU besides 1-8 and their hyperthreads; interrupts left as they are" >&2
 fi
 
-echo "node-setup: complete ($allocated x 2 MiB hugepages, $HUGEPAGE_MOUNT mounted)"
+echo "node-setup: complete ($allocated hugepages, $HUGEPAGE_MOUNT mounted)"
+isolated=$(cat /sys/devices/system/cpu/isolated 2>/dev/null)
+echo "node-setup: isolated CPUs ${isolated:-none}${isolated:+ (setup/kernel-tuning.sh --check for the rest)}"

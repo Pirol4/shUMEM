@@ -125,6 +125,9 @@ for part in sys.argv[1].split(","):
 print(",".join(str(c) for c in sorted(cpus & set(range(1, 9)))))
 ' "$acpi_cpus" 2>/dev/null || echo '?')"
 [[ -z "$acpi_on_lcores" ]] || warn "ACPI IRQ 9 may fire on lcores $acpi_on_lcores (affinity $acpi_cpus): lcore 1 will pause twice a second (CLAUDE.md 19.9)"
+# The final evaluation runs on a tuned kernel (setup/kernel-tuning.sh, 19.25).
+isolated="$(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
+[[ "$isolated" == 1-8 ]] || warn "lcores 1-8 are not isolated (isolated: '${isolated:-none}'): run setup/kernel-tuning.sh and reboot for evaluation runs"
 exp_if="$(ip -o -4 addr show | awk '$4 ~ /^10\.10\.1\.1\// {print $2; exit}')"
 if [[ -n "$exp_if" ]] && sudo -n ethtool -a "$exp_if" 2>/dev/null | grep -qE '^(RX|TX):[[:space:]]+on'; then
     warn "pause frames are on on $exp_if (CLAUDE.md 15.5): sudo ethtool -A $exp_if rx off tx off"
