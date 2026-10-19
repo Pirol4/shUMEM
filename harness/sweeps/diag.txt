@@ -1,0 +1,41 @@
+# Diagnostics before the next design round (CLAUDE.md 19.24), ~45 min.
+# Not the evaluation: each block answers a question that decides what to
+# change in the code before the final batteries.
+#
+# label                     system         window_ms headroom_pct  options / extra rate_sweep.py args
+#
+# 1. Does shRing's ~3x Rx cycles per packet (19.22) cap its throughput when
+#    packets get smaller? 512 B line rate is 23.5 Mpps, 256 B 44.6 Mpps;
+#    ~450 cycles/pkt at ~2.4 GHz is ~42 Mpps over 8 lcores, ~1,100 is ~17.
+small512_privring-128       privring-128   -  -  rates=50,75,90,98 duration=20 --pkt-size 512
+small512_shring-8           shring-8       -  -  rates=50,75,90,98 duration=20 --pkt-size 512
+small512_dyn-128            dyn-128        -  -  rates=50,75,90,98 duration=20 --pkt-size 512
+small256_privring-128       privring-128   -  -  rates=25,40,50 duration=20 --pkt-size 256
+small256_shring-8           shring-8       -  -  rates=25,40,50 duration=20 --pkt-size 256
+small256_dyn-128            dyn-128        -  -  rates=25,40,50 duration=20 --pkt-size 256
+#
+# 2. The advisor's question (19.23): when does the shared mempool's common
+#    ring become a cost? Shrink the per-lcore cache so gets and puts reach it.
+cache32_privring-128        privring-128   -  -  rates=98 duration=30 cache=32
+cache32_shring-8            shring-8       -  -  rates=98 duration=30 cache=32
+cache32_dyn-128             dyn-128        -  -  rates=98 duration=30 cache=32
+cache0_privring-128         privring-128   -  -  rates=98 duration=30 cache=0
+cache0_shring-8             shring-8       -  -  rates=98 duration=30 cache=0
+cache0_dyn-128              dyn-128        -  -  rates=98 duration=30 cache=0
+#
+# 3. How often does shRing wedge under a cold-core stall (19.22: once in 11)?
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100
+wedge_shring-8              shring-8       -  -  rates=98 duration=30 stall=4:1000:100

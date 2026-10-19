@@ -18,6 +18,8 @@
 #   duration=<s>             instead of $DURATION
 #   stall=<core>:<us>:<ms>   run stall_core.py on <core> during the traffic,
 #                            <us> every <ms> (CLAUDE.md 17.10)
+#   cache=<n>                l3fwd's per-lcore mempool cache (default 256,
+#                            0 = none): every get/put through the common ring
 # e.g. `--hot-share 0.5` among the extra args makes queue 0 hot (17.7).
 #
 # Environment:
@@ -238,13 +240,15 @@ summarize() {
 run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
-    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" arg
+    local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" arg
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
             duration=*) duration="${arg#duration=}" ;;
             stall=*)    stall="${arg#stall=}"
                         [[ "$stall" =~ ^[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core>:<us>:<ms>" ;;
+            cache=*)    cache="${arg#cache=}"
+                        [[ "$cache" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want cache=<n>" ;;
             *)          extra+=("$arg") ;;
         esac
     done
@@ -253,6 +257,7 @@ run_one() {
     out="$OUT_DIR/$label.out"
     [[ "$window" == - ]] || env_args+=("FILL_WINDOW_MS=$window")
     [[ "$headroom" == - ]] || env_args+=("FILL_HEADROOM=$headroom")
+    [[ -z "$cache" ]] || env_args+=("L3FWD_MEMPOOL_CACHE=$cache")
 
     log "$label: starting $system ${env_args[*]:-}"
     # Append mode for every writer of $out: l3fwd's final counters would
@@ -302,7 +307,7 @@ run_one() {
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }
