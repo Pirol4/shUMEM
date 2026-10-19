@@ -135,6 +135,11 @@ def steady_state_points(runs):
         if last not in run["dram"]:
             continue
         loss = run["windows"][-1]["loss_pkts"]
+        # Stray unicast to the tgen MAC makes TRex's loss negative (17.8); the
+        # dut's own count for the last window is what earlier windows left.
+        if loss < 0 and run.get("rx_missed_run"):
+            earlier = sum(w["loss_pkts"] for w in run["windows"][:-1])
+            loss = max(int(run["rx_missed_run"]) - earlier, 0)
         yield (system_of(run), run["label"], float(run["dram"][last][2]),
                60 * loss / float(run["duration"]))
 

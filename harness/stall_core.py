@@ -72,10 +72,14 @@ def main():
             next_stall += period_s
     except KeyboardInterrupt:
         pass
+    # pkill -f signals sudo and this process alike, and sudo relays it: a
+    # second SIGINT used to land inside the print below and lose the report.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     elapsed = time.perf_counter() - started
     print("%d stalls, mean %.0f us, %.2f%% of CPU %d over %.1f s"
           % (stalls, 1e6 * stalled_s / max(stalls, 1), 100 * stalled_s / elapsed,
-             args.core, elapsed))
+             args.core, elapsed), flush=True)
 
 
 if __name__ == "__main__":

@@ -139,7 +139,7 @@ def main():
             print("%-16s %5.1f%%  tx=%d rx=%d noise=%d loss=%.4f%%  lat avg/max=%s/%s us" % (
                 args.label, rate_pct, row["tx_pkts"], row["rx_pkts"], row["rx_noise_pkts"],
                 row["loss_pct"],
-                row["lat_avg_us"], row["lat_max_us"]))
+                row["lat_avg_us"], row["lat_max_us"]), flush=True)
     finally:
         client.disconnect()
 

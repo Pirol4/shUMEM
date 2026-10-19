@@ -1380,3 +1380,48 @@ Reply to the progress e-mail, on "a ring of 1,024 keeping only 128 buffers poste
 | **two borrowers** | (503 − 128) × 300 ≈ **113 k**, queue 3 only; queue 0 0 (IRQs moved, §19.13) | ≈ (1,001 − 127) × 8.04 × 300 ≈ **2.1 M**, every queue | queue 3 doubles 32 → 512 in four stalls, then holds ~500 of the ~660 credits left after queue 0's ~108 and the others' floors: **a few thousand**, all in the first stalls; queue 0 near 0 unless the pool runs dry |
 
 The two-borrower row is the first test where the credits should beat the static budget by more than the 2–4× of the cold stall — about 50× — because the stalled queue's need (~500) fits in what the others leave. If queue 0 loses there, first come first served is the cause (§19.6) and proportional shares stop being optional.
+
+&nbsp;
+
+### 19.22 Day one of the week: the three batteries (2026-10-19, fork `9601a7530`, interrupts routed by `node-setup.sh`)
+
+New instantiation (dut `51:00.0` MAC `b8:3f:d2:13:09:5e`; tgen `51:00.1` / `ens2f1np1`, MAC `b8:3f:d2:13:07:6b`). The profile was stale again (`/local/repository` at `52a1055`, fixed by hand), the dut's `/mydata` Blockstore was not created (its `sda4` is an LVM member with no volume group; `/mydata` is a plain directory on the 56 GB root disk this time), and `node-setup.sh` routed all 177 movable interrupts off the lcores on both nodes — its first run on real nodes. `sweep.sh` ran the three batteries (34 runs, 12:35–13:36) unattended in tmux; the ssh session dropping at 12:57 did not touch it. Data: `C:\Users\filip\shumem_day21` (both nodes' `/mydata/exp`, the dut's results). Figure: `docs/figures/tradeoff.{png,pdf}`.
+
+**Harness bugs this run found (fixed, shUMEM after `c5e88b8`):** (1) `rate_sweep.py`'s stdout is block-buffered over ssh, so both result lines of a two-window run reached the dut together at exit and `summary.txt` gives window 2's DRAM for window 1 too; window 2 is right, window 1 was recomputed from the PCM CSVs (61 s earlier, checked against privRing-1024's trace) for the table below. `print(..., flush=True)` and `PYTHONUNBUFFERED=1` now. (2) `stall_core.py`'s report was lost in most runs: `pkill -f` signals both `sudo` and Python and sudo relays it, so a second SIGINT landed inside the final `print`; it now ignores further signals once stopping. The stall itself ran (328 stalls in 32.8 s where reported). (3) `sweep.sh`'s IRQ 9 warning wanted CPU 0 alone; it now warns only when the affinity reaches lcores 1–8. Also: three tradeoff runs (13:17–13:23) received ~50–100 stray unicast frames (on queue 2) and twice the usual multicast, so TRex shows window 2 loss of −50/−25/−21; their real window-2 loss is the dut's `rx_missed_errors` minus window 1's (50 / 25 / 26), and `sweep_report.py` now plots that.
+
+**On this node the pausing lcore is 5 (queue 4)**, not 6 as on 2026-10-13: every packet dyn-128 loses under balanced load is queue 4's, and queue 4 is the only one that grows (peak backlog 87–119). Cause open, as before.
+
+**Stall tests** (98%, 30 s, 1 ms every 100 ms):
+
+| test | fill-128 | shRing-8 | dyn-128 |
+|---|---|---|---|
+| cold core stalled (lcore 4) | 263,977 / 264,072, queue 3 only | 2,130,435, every queue; **and one run that wedged: 195,935,787 (81%)** | 107,900 / 93,545, queue 3 (+ 132 on queue 4) |
+| hot core stalled (lcore 1, hot share 0.5) | 1,325,759 / 1,325,996 | 2,137,810 / 2,138,407, ~133.5 k on each cold queue | 1,137,821 / 1,140,566, cold queues 0 (queue 4: 35–49) |
+| **two borrowers** (hot share 0.5 + lcore 4 stalled) | **112,843**, queue 3 only | **2,125,267**, every queue | **12,972**: queue 3 12,909, queue 4 56, queue 0 7 |
+
+- **Hot-core stall, n = 5 over two instantiations:** dyn-128 mean 1,136,677 (1,133,721–1,140,566), shRing 2,138,249 (2,137,810–2,138,727), fill-128 ~1,325,700. Bystander queues: shRing 133 k each, dyn-128 and fill-128 none. The quotable row is unchanged.
+- **Two borrowers, measured for the first time: 8.7× under the static budget and 164× under shRing.** The prediction (113 k / 2.1 M / "a few thousand") holds for fill-128 and shRing to the percent; dyn-128 lost ~3× the guess because queue 4's pauses reclaimed from the stalled queue 29 times (queue 3 paid 768 credits). The hot queue lost 7: with IRQs off lcore 1 it needed only ~108 buffers (peak backlog 54), which the pool had, so first come first served did not hurt it here.
+- **Cold stall: dyn-128 lost 94–108 k today against 74–77 k on 2026-10-13**, for the same reason: queue 4 reclaimed 11 times and queue 3 paid 305–338 credits (181 then). That is the policy doing what §19.10 asked — a stalled borrower gives back what others are entitled to — and its cost lands on the stalled queue. Still 2.5–2.8× under fill-128 and ~20× under shRing, on one queue.
+- **shRing wedged once.** `cold-stall_shring-8` (12:36): all eight queues received ~5.65 M packets — ~5.6 s of traffic — and then nothing for the remaining ~24 s; `rx_missed_errors` 195.9 M, `nombuf` 0, `contention` 25 k, PCM back to idle from 12:36:41. The next identical run (r2) was normal. One in eleven shRing stall runs so far (5 cold, 5 hot, 1 two-borrower). Signature of the shared ring's head never advancing again: some 64-entry block never counted as fully consumed. Candidates, unverified: the invalid acquire *store* on that path (§15.6, `mlx5_rx.c:1134`) or the `THRESHOLD % 64` assumption in its doorbell logic. Next: repeat the cold stall on shRing 10–20 times to get a rate, and read the head/bitmap code for a lost update. If it reproduces, it is a robustness result on its own: under shRing one stalled core can stop reception on every queue for good.
+
+**Balanced, 98%, 2 × 60 s** (window 1 = start-up, window 2 = steady state; DRAM write in MB/s, window 1 recomputed; loss in packets per window; cycles per packet over non-empty bursts):
+
+| system (runs) | DRAM write W1 | DRAM write W2 | loss W1 | loss W2 | Rx cyc/pkt | fwd cyc/pkt |
+|---|---|---|---|---|---|---|
+| privRing-1024 (2) | 10,059 / 10,082 | 8,938 / 8,983 | 0 / 0 | 0 / 0 | 415 / 419 | 575 / 580 |
+| privRing-128 (2) | 606 / 637 | 508 / 519 | 3 / 18 | 0 / 0 | 302 / 303 | 463 / 464 |
+| fill-128 (3) | 1,063 / 1,134 / 801 | 814 / 893 / 594 | 0 | 0 | 304–307 | 450–452 |
+| shRing-8 (3) | 168 / 152 / 147 | **36 / 78 / 28** | 40 / 5 / 30 | **0 / 0 / 0** | **870 / 917 / 902** | 1,054 / 1,111 / 1,094 |
+| dyn-128, 10 s, 150% (4) | 87 / 12 / 8 / 8 | **55 / 12 / 6 / 6** | 149 / 144 / 160 / 254 | **0 / 69 / 0 / 108** | 296–298 | 444–447 |
+| dyn-128, 30 s, 150% | 11 | 3 | 95 | 50 | 297 | 446 |
+| dyn-128, 10 s, 300% | 39 | 23 | 113 | 25 | 297 | 447 |
+| dyn-128, 30 s, 300% | 48 | 24 | 62 | 26 | 297 | 446 |
+| dyn-128, 2 s, 150% | 37 | 16 | 568 | 370 | 297 | 445 |
+| dyn-128, floor 64 | 142 | 149 | 69 | 0 | 298 | 449 |
+
+- **DRAM write falls from window 1 to window 2 in every system** (privRing-1024 −11%, fill-128 −23%, shRing −50 to −80%). Compare systems in the same window only; the drift is not understood.
+- **Steady state, dyn-128 against shRing: a tie, not a win.** DRAM write 6–55 against 28–78 MB/s (dyn lower in three of four runs, medians ~9 against ~36); loss 0–108 against 0 per minute. No dyn-128 setting is below shRing on both axes in a repeatable way: `w10_h150` gave (6 MB/s, 0) once and (6, 108) the next time. Longer memory or more headroom (30 s, 300%) halve the steady loss to ~25–50 at ~3–24 MB/s; floor 64 removes it at 149 MB/s, above shRing. The 2 s window is clearly worse (370). The loss is queue 4's pauses, so the curve is the price of an lcore that pauses, which shRing absorbs by sharing.
+- **The Rx path costs shRing ~3× per packet:** 870–928 cycles against ~300 for privRing-128, fill-128 and dyn-128 (and 574–600 under the hot-queue tests). The credits cost nothing measurable (dyn 296–298 against privRing-128's 302–303). privRing-1024 pays ~415, +38% over the 128-buffer systems — the price of its working set in cache misses. Not yet explained for shRing: the CAS on the shared head (`contention` 505–532 k per run) and the shared bitmap are the candidates; mean burst size per system would separate per-burst from per-packet cost.
+- **The advisor's mempool question, answered with numbers (§19.20):** under balanced load every system takes exactly the initial cache fill from the common ring (get = 2,056 = 8 lcores × 257, put = 0; once 2,313, one more refill) and nothing in 964 M packets — **0 common-ring objects per packet**; the per-lcore caches absorb all of it. Under stalls dyn-128 moves 144–185 k objects (≈ 1 per 650–850 packets), because a queue that grows to ~800 posted buffers drains its 256-buffer cache into the NIC several times; shRing moves 79 k in the hot-core stall, fill-128 ~0. The common ring is touched only when budgets move, three orders of magnitude below the packet rate.
+
+**Open after today, in order:** (1) the shRing wedge: rate and mechanism; (2) the W1→W2 DRAM drift; (3) queue 4 / lcore 5 pauses (and lcore 6 on the previous node) — tracing between runs, `isolcpus`/`nohz_full` as the structural fix (§15.5); (4) shRing's 3× Rx cycles: burst size and contention per burst; (5) the credit policy charges a stalled borrower for every bystander's pause (cold-stall drift 75 k → 100 k): consider a minimum time between reclaims from the same queue.

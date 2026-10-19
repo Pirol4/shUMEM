@@ -286,9 +286,10 @@ run_one() {
 
     log "$label: traffic, rates $rates x ${duration} s ${extra[*]:-}"
     # Each result line marks the end of one window; stamp it with the dut's
-    # clock, the one PCM writes, for DRAM per window.
+    # clock, the one PCM writes, for DRAM per window. Unbuffered: over ssh
+    # Python block-buffers stdout and every line arrived at exit (19-Oct).
     : >"$OUT_DIR/$label.times"
-    if ! "${SSH[@]}" "cd $TGEN_TREX_DIR && ./rate_sweep.py --label $label --rates $rates --duration $duration --out $CSV ${extra[*]:-}" 2>&1 \
+    if ! "${SSH[@]}" "cd $TGEN_TREX_DIR && PYTHONUNBUFFERED=1 ./rate_sweep.py --label $label --rates $rates --duration $duration --out $CSV ${extra[*]:-}" 2>&1 \
             | while IFS= read -r line; do
                   printf '%s\n' "$line"
                   [[ "$line" != *" tx="*" rx="* ]] || printf '%s %s\n' "$(date +%s.%N)" "$line" >>"$OUT_DIR/$label.times"
