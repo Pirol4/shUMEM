@@ -1557,3 +1557,85 @@ Both need an lcore stopped for longer than the ring lasts at a precise point of 
 7. Copy `/mydata/exp` from both nodes and `/mydata/dpdk-research/results` from the dut to `C:\Users\filip\shumem_eval` before ending.
 
 **Predictions to hold the results against** (from §19.18–19.24 and the code changes): shringfix-8 never wedges in e8 and otherwise measures like shring-8 (the stall loss is head-of-line blocking, not the race); with isolated cores dyn-128's balanced loss falls towards 0 (the lcore pauses were the cause, §19.22); reserve 64 cuts dyn-128's cold-stall loss back towards the ~75 k of 2026-10-13 and the two-borrower loss below 13 k; NDR at 512 B: shring-8 ≈ 84% of line rate, the others ≥ 98%; e5: stack restores cache-256-like DRAM write under cache 32, groups cut cycles per packet under cache 0.
+
+&nbsp;
+
+### 19.27 The final evaluation, first pass (2026-10-19 21:30 – 2026-10-20 00:50, tuned dut, fork `181be3bbf`)
+
+Same instantiation as §19.22–19.24, dut rebooted with `isolcpus=domain,managed_irq,1-8 irqaffinity=0,9-15 nosmt nmi_watchdog=0`, 16 × 1 GiB pages (no `nohz_full`: the kernel lacks it, §19.25). e0 smoke passed after one fix: `rmp_fix`'s first version tried the lock at every burst (23.6 M failed tries in 10 s, 1,490 Rx cycles per packet); `181be3bbf` checks the block read-only first (162 k, 980). Then e1, e8, e3, e5, e2, e4, e6, e7 unattended, 185 runs plus 5 from a first start outside tmux (kept: same build and node). Data: `C:\Users\filip\shumem_eval`. 98% of line rate and 1500 B unless stated; loss is TRex's (`rx_phy − rx_good` on the dut agrees).
+
+**1. Stall table (e1, n = 5–6).**
+
+| test | fill-128 | shring-8 | shringfix-8 | dyn-128 (reserve 64) | dyn-128 reserve 0 |
+|---|---|---|---|---|---|
+| cold core (lcore 4) | 264,057 (264.0–264.1 k), queue 3 only | 2,130,603, ~266 k on **every** queue | 2,130,348, the same | **84,419** (84.3–84.6 k), queue 3 only | **65,642** (65.3–65.8 k) |
+| hot core (lcore 1, hot share 0.5) | 1,326,228 | 2,138,024–2,139,103 (4 runs) **+ 1 wedge (177 M)** | 2,138,990, ~133.6 k on each cold queue | **1,146,948**, cold queues 0 | – |
+| two borrowers | 112,781, queue 3 only | 2,127,136, every queue | 2,127,136 | **1,541** (1,505–1,565) | 1,550 |
+
+- **Two borrowers is now the strongest row: 73× under the static budget, ~1,380× under shRing**, n = 5 within ±2%. On 2026-10-19 afternoon it was 12,972: the difference is the isolated cores — with no lcore pauses no queue reclaims from the stalled one (§19.22 had 29 reclaims), so queue 3 keeps what it borrowed.
+- **The reserve costs and, on isolated cores, buys nothing.** With no bystander pauses there are no reclaims to prevent; the reserve only caps a borrower 64 lower (736 instead of 800), so each 1 ms stall loses ~281 instead of ~219 packets (84.4 k against 65.6 k). Its intended benefit (§19.25 b) was measured only on the untuned node (cold stall 94–108 k with reclaims, against 74–77 k before they existed) and has not been measured directly with and without the reserve under pauses. **Open decision: default `fill_reserve` back to 0, or keep it as the price of robustness to pauses and show both rows.**
+- shring-8 and shringfix-8 lose the same everywhere they do not wedge: the stall loss is head-of-line blocking, not the race. `contention` is ~3.5× higher with `rmp_fix` (trylock failures when two lcores see the same full block) at the same Rx cost (~970 cycles per packet).
+
+**2. The wedge (e8 + e1): shring-8 wedged 3 times in 31 stall runs tonight (hot-stall r4 at 21:41, e8 r16 at 22:39, e8 r18 at 22:42), shringfix-8 0 times in 31.** With the afternoon's 2 in 17, the published code wedges in 5 of 48 stall runs (~10%); the chance of 0 in 31 at that rate is (1 − 0.104)³¹ ≈ 3%. Same signature each time: every queue stops at the same moment (e.g. r16: 24.4 M short on each), DRAM to idle. **The race of §19.25 is the cause, beyond reasonable doubt, and the fix removes it at ~no cost.** Also seen in a hot-core stall, so it is not specific to lcore 4.
+
+**3. NDR, loss ≤ 10⁻⁶, 10 s trials (e3).**
+
+| packet | privring-128 | fill-128 | dyn-128 | shring-8 | shringfix-8 |
+|---|---|---|---|---|---|
+| 1500 B (8.20 Mpps) | 100% | 100% | 100% | 100% | 100% |
+| 1024 B (11.93 Mpps) | 100% | 100% | 100% | 100% | 100% |
+| 512 B (23.32 Mpps) | 99.6% | 100% | 100% | **84.0% (19.59 Mpps)** | **84.0%** |
+| 256 B (44.64 Mpps) | 100% | 100% | 100% | **none ≥ 50%** | **none ≥ 50%** |
+
+- TRex really offered those rates (44.64 Mpps measured at 256 B), and privring-128 / fill-128 / dyn-128 forwarded them with no loss.
+- **Correction to §19.24: shRing's limit is not simply CPU.** At 256 B it forwarded 44.56 Mpps of 44.64 (the "~1,000 cycles per packet" is measured over non-empty bursts and falls with load as bursts fill). What it shows instead: at 512 B a hard cap at 19.64 Mpps (identical receive count at 87.5% and 100% offered); at 256 B a **constant ~0.18% loss at every rate from 22 to 44 Mpps**, so no rate passes 10⁻⁶. In both cases the dropped packets are counted by `rx_phy_packets` and by no drop counter the dut prints (`rx_missed_errors` 0). Mechanism open (candidates: the 64-entry in-sequence return delaying the doorbell at high packet rates; an RMP-level drop the per-RQ counters do not see).
+
+**4. Balanced (e2, n = 3, two 60 s windows; window 1 now measured correctly).**
+
+| system | loss W1 / W2 | DRAM write W1 | DRAM write W2 | Rx cycles/pkt |
+|---|---|---|---|---|
+| privring-1024 | 0 / 0 | 9,664 | 8,283 | 412 |
+| privring-128 | 0 / 0 | 798 | 724 | 315 |
+| fill-128 | 0 / 0 | 565 | 514 | 304 |
+| shring-8 | 0 / 0 | 99 | **16** (9–22) | **963** |
+| shringfix-8 | 0 / 0 | 97 | 20 (14–24) | 978 |
+| dyn-128 | 0 / 0 | 39 | **24** (20–30) | **303** |
+
+- **With isolated cores dyn-128 loses nothing under balanced load** (it lost 71–282 a minute before, §19.18 and §19.22): the loss was the lcore pauses, as §19.22 said. Balanced is now a tie on loss and on DRAM write with shRing (dyn writes less in window 1, a little more in window 2), at a third of shRing's Rx cycles.
+- (The few negative losses are stray unicast, §17.8.)
+
+**5. DDIO (e7, `pcm-pcie -e`, 30 loaded seconds each).** Inbound full-line writes (ItoM) 1.92–1.93 × 10⁸/s in every system — 98% × 8.2 Mpps × 24 lines, so the counter is the NIC's packet writes — and the share that hit the LLC: **privring-1024 21.6%, privring-128 93.0%, fill-128 95.4%, shring-8 98.7%, shringfix-8 98.8%, dyn-128 99.5%.** NIC reads (PCIRdCur, the Tx side) hit ≥ 99.4% everywhere. This is the metric of the rxBisect paper's Fig. 10, measured directly; it orders the systems as DRAM write does.
+
+**6. Mempool (e5, 30 s each, one run per cell): groups fix contention, a stack fixes locality.**
+
+| cache · ops · groups | privring-128: loss · Rx cyc · DRAM wr | shring-8 | dyn-128 |
+|---|---|---|---|
+| 256 · ring · 1 (control) | 0 · 317 · 889 | 0 · 952 · 157 | 0 · 303 · 63 |
+| 32 · ring · 1 | 0 · 389 · **7,186** | 0 · 1,025 · 3,947 | 0 · 344 · **3,504** |
+| 32 · **stack** · 1 | 0 · 317 · **204** | 0 · 963 · 51 | 0 · 304 · **2** |
+| 32 · ring · **4** | 0 · 388 · 7,224 | 0 · 1,002 · 2,288 | 0 · 342 · 3,334 |
+| 32 · stack · 4 | 0 · 342 · 2,048 | 0 · 1,024 · 35 | 0 · 303 · 86 |
+| 0 · ring · 4 | 0 · 936 · 7,249 | **48% lost** · 4,537 | 0 · 516 · 10,198 |
+| 0 · stack · 4 | 0 · 1,434 · 487 | **56% lost** · 4,576 | **0 · 421 · 57** |
+
+- **Contention (the advisor's concern):** with no cache and one pool every system lost 40–49% (§19.24); with 4 groups privring-128 and dyn-128 lose nothing and dyn-128's Rx cost falls from 3,950 to 516 (ring) / 421 (stack) cycles. **shRing cannot use groups:** all its buffers come from queue 0's pool (§19.26), so it still collapses.
+- **Locality:** with a 32-buffer cache the FIFO ring blows DRAM write up 10–60×, and groups do not help (each group's ring is still FIFO); a LIFO stack brings it back to or below the 256-cache control (dyn-128 **2 MB/s**, privring-128 204, shRing 51).
+- **dyn-128 with no per-lcore cache at all, 4 stack groups: 0 lost, 421 cycles, 57 MB/s** — the shared mempool made harmless by structure, not by the cache.
+- Unexplained, one run each: privring-128 with stack·4 writes 2,048 MB/s against 204 with stack·1; privring-128 with cache 0 · ring · 4 counts 11.9 common-ring objects per packet (2.0 for dyn-128 in the same cell). Repeat before reading anything into them.
+
+**7. Moving hot queue (e4, hot share 0.5 moving every 5 s, 60 s, n = 2).** Every system loses ≤ 19; DRAM write dyn-128 21, shRing 166, fill-128 404 MB/s. On isolated cores a hot queue at 4.5 Mpps needs only ~25–35 buffers (peak backlog 23–33; it needed ~108 with the timer and IRQ pauses, §19.13), so the credits barely move (budgets ≤ 49): **this test does not stress the policy on a clean node.**
+
+**8. Stall length (e6, cold core, one run each).**
+
+| stall | fill-128 | shringfix-8 | dyn-128 | dyn model: 300 × max(0, 1.004·d − 736) |
+|---|---|---|---|---|
+| 250 µs | 38,448 | 319,065 | **558** | 0 (+ growth) |
+| 500 µs | 113,674 | 927,286 | **1,671** | 0 (+ growth) |
+| 1 ms | 264,022 | 2,131,566 | 84,418 | 80.4 k |
+| 2 ms | 565,010 | 4,540,365 | 385,306 | 381.6 k |
+
+Below ~730 µs the stalled queue's need fits in what it can borrow and dyn-128 loses only while it grows (the first stalls); above, it loses what exceeds its 736 buffers, as the model says (within 1–5%). 69–570× under the others at 250 µs.
+
+**Predictions of §19.26 against this:** shringfix never wedges ✔; dyn balanced loss → 0 ✔; NDR 512 B shRing ≈ 84% ✔ (but not for the reason given); reserve cuts the cold-stall loss ✘ (it raises it on isolated cores); two borrowers below 13 k ✔ (1.5 k); stack restores DRAM under cache 32 ✔; groups cut cycles under cache 0 ✔.
+
+**Open:** the reserve default; shRing's small-packet drops (where, why constant 0.18%); the two unexplained mempool cells; the moving test needs pauses (stall_core following the hot queue) to exercise the policy; repetitions for e5/e6 (n = 1); figures (stall length, mempool, DDIO, NDR).
