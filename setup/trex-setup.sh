@@ -80,7 +80,9 @@ section "Installing build dependencies"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y -qq build-essential cmake ninja-build pkg-config git wget \
-    libudev-dev libnl-3-dev libnl-route-3-dev libsystemd-dev binutils
+    libudev-dev libnl-3-dev libnl-route-3-dev libsystemd-dev binutils python3-pip
+# rate_sweep.py decodes the HDR latency histograms TRex sends with --hdrh.
+pip3 install --quiet hdrhistogram
 
 # --- 2. rdma-core v44 in /usr/local (tgen only) ----------------------------------
 
@@ -204,5 +206,5 @@ section "Done"
 echo "Pause frames on $IFACE (expect RX/TX off; node-setup.sh sets this at boot):"
 ethtool -a "$IFACE" | grep -E '^(RX|TX):'
 echo
-echo "Start the TRex server (inside tmux; keep it running):"
-echo "  cd $TREX_DIR && sudo ./t-rex-64 -i -c ${#WORKER_CORES[@]} --no-ofed-check"
+echo "Start the TRex server (inside tmux; keep it running; --hdrh gives 1 us latency percentiles):"
+echo "  cd $TREX_DIR && sudo ./t-rex-64 -i -c ${#WORKER_CORES[@]} --no-ofed-check --hdrh"

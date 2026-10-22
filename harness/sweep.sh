@@ -23,7 +23,15 @@
 #   pcm=pcie                 record pcm-pcie (DDIO) instead of pcm-memory
 #   ops=<driver>             l3fwd's mempool driver (ring_mp_mc, stack, lf_stack)
 #   groups=<G>               G mbuf pools (l3fwd) and, for dyn-*, G credit pools
-#   reserve=<R>              dyn-* credit pool reserve (default 64; 0 = earlier policy)
+#   reserve=<R>              dyn-* credit pool reserve (default 0 since fork
+#                            c4df0acf6; 64 was the 19.27 setting)
+#   work=<N>                 every lcore does N random reads per packet in a
+#                            40 MiB buffer (l3fwd_work.h, CLAUDE.md 20)
+#   target=<lcore>:<N>       that lcore does N instead (the papers' target core)
+#   payload=1                every lcore also reads each packet's payload
+#   mib=<M>                  size of the work buffer (default 40)
+#   hog=<n>                  n stress-ng STREAM workers on CPUs 9-15 during the
+#                            run (memory-bandwidth co-location, rxBisect Fig. 17)
 # e.g. `--hot-share 0.5` among the extra args makes queue 0 hot (17.7).
 #
 # Environment:
@@ -35,6 +43,10 @@
 #   RATES      default 98,98: start-up window, then steady state (CLAUDE.md 19.15)
 #   DURATION   seconds per rate, default 60
 #   CSV        rate_sweep.py output on the tgen, default /mydata/exp/tradeoff.csv
+#              (and its per-window details next to it, .jsonl)
+#   OCCUPANCY_US  l3fwd's Rx ring occupancy sample period (default 1000; 0: off)
+#   RESUME     1: skip lines whose label already has a block in summary.txt, so
+#              an interrupted battery can be started again (default 0)
 #
 # Output: $EXP_DIR/sweep/<label>.out (l3fwd and rate_sweep output),
 # <label>.times (when each traffic window ended, dut clock), <label>.stall
@@ -53,6 +65,10 @@ CSV="${CSV:-/mydata/exp/tradeoff.csv}"
 TGEN_HOST="${TGEN_HOST:-}"
 L3FWD_BIN="${SHRING_DIR:-/mydata/dpdk-research/shring-dpdk}/build/examples/dpdk-l3fwd"
 TGEN_TREX_DIR=/local/repository/harness/trex
+OCCUPANCY_US="${OCCUPANCY_US:-1000}"
+RESUME="${RESUME:-0}"
+# CPUs no lcore, no PCM (CPU 0) and no ssh use: co-located memory hogs go here.
+HOG_CPUS=9-15
 # rate_sweep.py waits this long after each window before reading counters.
 RX_DRAIN_S=1
 # Trimmed from each end of a window before averaging DRAM: TRex's ramp, the
@@ -80,13 +96,21 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
 [[ "$("${SSH[@]}" hostname 2>/dev/null)" == tgen* ]] || die "$TGEN_HOST is not the tgen, or cannot be reached by ssh without a password.
        On dut:  ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519 (if absent); cat ~/.ssh/id_ed25519.pub
        On tgen: append that line to ~/.ssh/authorized_keys2 (authorized_keys is rewritten by CloudLab)"
-"${SSH[@]}" "pgrep -f '_t-rex-6[4]'" >/dev/null || die "TRex is not running on $TGEN_HOST (cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check)"
+"${SSH[@]}" "pgrep -f '_t-rex-6[4]'" >/dev/null || die "TRex is not running on $TGEN_HOST (cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check --hdrh)"
 
 # The build must have the knobs the sweep files use.
-# fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5.
+# fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5;
+# fork 290de897f: synthetic work and occupancy in l3fwd.
 grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "$L3FWD_BIN" \
-    || die "$L3FWD_BIN is missing or older than fork a8a7459be:
+    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" \
+    || die "$L3FWD_BIN is missing or older than fork 290de897f:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
+# HDR latency needs the hdrh module where rate_sweep.py runs.
+"${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \
+    || die "python3 on $TGEN_HOST lacks hdrh: run 'sudo pip3 install hdrhistogram' there"
+if grep -vE '^[[:space:]]*(#|$)' "$PLAN" | grep -q ' hog='; then
+    command -v stress-ng >/dev/null || die "the plan uses hog= but stress-ng is missing: sudo apt-get install -y stress-ng"
+fi
 
 # Not fatal, but every number of CLAUDE.md 19.12-19.18 assumes them.
 warn() { echo "WARNING: $*" >&2; }
@@ -181,7 +205,26 @@ stop_stall() {
     wait "$STALL_PID" 2>/dev/null || true
     STALL_PID=""
 }
-trap 'stop_stall; stop_l3fwd' EXIT
+HOG_PID=""
+
+stop_hog() {
+    [[ -n "$HOG_PID" ]] || return 0
+    # SIGINT: stress-ng stops its workers and prints its metrics; TERM if a
+    # background start left it ignoring SIGINT, then KILL.
+    local sig waited
+    for sig in INT TERM KILL; do
+        pkill -"$sig" -f "[s]tress-ng --stream" 2>/dev/null || true
+        waited=0
+        while alive "$HOG_PID" && (( waited < 5 )); do
+            sleep 1; waited=$((waited + 1))
+        done
+        alive "$HOG_PID" || break
+        log "stress-ng still running after SIG$sig"
+    done
+    wait "$HOG_PID" 2>/dev/null || true
+    HOG_PID=""
+}
+trap 'stop_hog; stop_stall; stop_l3fwd' EXIT
 trap 'log "interrupted"; exit 130' INT TERM
 
 free_label() {
@@ -201,11 +244,15 @@ free_label() {
 dram_per_window() {
     local label="$1" duration="$2" csv="$EXP_DIR/pcm-mem_$1.csv" k=0 t rest end start
     [[ -e "$csv" && -e "$OUT_DIR/$label.times" ]] || return 0
+    local d
     while read -r t rest; do
         k=$((k + 1))
+        # rate_sweep.py prints each window's own length (a warm-up is shorter).
+        d="$(grep -oE ' dur=[0-9.]+' <<<"$rest" | cut -d= -f2)"
+        d="${d:-$duration}"
         end=$(awk -v t="$t" -v d="$RX_DRAIN_S" -v m="$PCM_TRIM_S" 'BEGIN { printf "%.3f", t - d - m }')
-        start=$(awk -v e="$end" -v d="$duration" -v m="$PCM_TRIM_S" 'BEGIN { printf "%.3f", e - d + 2 * m }')
-        echo "DRAM window $k (${rest%%tx=*}): $("$SCRIPT_DIR/pcm_window.py" "$csv" "$start" "$end")"
+        start=$(awk -v e="$end" -v d="$d" -v m="$PCM_TRIM_S" 'BEGIN { printf "%.3f", e - d + 2 * m }')
+        echo "DRAM window $k (${rest%%tx=*}$(grep -oE 'phase=[a-z]+' <<<"$rest")): $("$SCRIPT_DIR/pcm_window.py" "$csv" "$start" "$end")"
     done <"$OUT_DIR/$label.times"
 }
 
@@ -215,7 +262,7 @@ summarize() {
         echo "== $label ($(date '+%F %T'))"
         echo "   run: $run"
         grep -E ' tx=[0-9]+ rx=[0-9]+ ' "$out" | sed 's/^/   /' || true
-        grep -E '^NDR ' "$out" | sed 's/^/   /' || true
+        grep -E '^(NDR|LAT|WARNING) ' "$out" | sed 's/^/   /' || true
         awk '/ \[[0-9]+\] = -?[0-9]+$/ { v[$1] = $NF }
              END {
                  # shRing drops some packets without counting them as missed
@@ -226,11 +273,16 @@ summarize() {
                  line = "   per queue rx:"
                  for (q = 0; q < 8; q++) line = line " " v["rx_q" q "_packets"]
                  print line
+                 line = "   per queue tx:"
+                 for (q = 0; q < 8; q++) line = line " " v["tx_q" q "_packets"]
+                 print line
              }' "$out"
         grep -oE 'contention [0-9]+' "$out" | tail -1 | sed 's/^/   /' || true
         grep -oE 'Rx queue [0-9]+: FILL credits:.*' "$out" | sed 's/^/   /' || true
         # Cost of the path and the mempool's shared ring (fork 9601a7530 on).
         grep -oE 'MEMPOOL .*' "$out" | sed 's/^/   /' || true
+        # Per lcore: cost (the target lcore differs), work, ring occupancy.
+        grep -oE '^(CYCLES|WORK|OCCUPANCY) .*' "$out" | sed 's/^/   /' || true
         awk '/^CYCLES lcore/ {
                  split($4, a, "="); split($5, r, "="); split($6, f, "=")
                  n += a[2]; rx += a[2] * r[2]; fw += a[2] * f[2]
@@ -247,6 +299,7 @@ summarize() {
         "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
         dram_per_window "$label" "$duration" | sed 's/^/   /' || true
         [[ ! -s "$OUT_DIR/$label.stall" ]] || tail -1 "$OUT_DIR/$label.stall" | sed 's/^/   stall_core: /'
+        [[ ! -s "$OUT_DIR/$label.hog" ]] || grep -E 'stream .*[0-9]' "$OUT_DIR/$label.hog" | tail -1 | sed 's/^/   hog: /'
     } | tee -a "$SUMMARY"
 }
 
@@ -254,6 +307,7 @@ run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
     local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory ops="" groups="" reserve="" arg
+    local work="" target="" payload="" mib="" hog=""
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
@@ -270,6 +324,16 @@ run_one() {
                         [[ "$reserve" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want reserve=<n>" ;;
             cache=*)    cache="${arg#cache=}"
                         [[ "$cache" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want cache=<n>" ;;
+            work=*)     work="${arg#work=}"
+                        [[ "$work" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want work=<n>" ;;
+            target=*)   target="${arg#target=}"
+                        [[ "$target" =~ ^[1-8]:[0-9]+$ ]] || die "$label: bad $arg, want target=<lcore 1-8>:<n>" ;;
+            payload=*)  payload="${arg#payload=}"
+                        [[ "$payload" =~ ^[01]$ ]] || die "$label: bad $arg, want payload=0|1" ;;
+            mib=*)      mib="${arg#mib=}"
+                        [[ "$mib" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want mib=<n>" ;;
+            hog=*)      hog="${arg#hog=}"
+                        [[ "$hog" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want hog=<n>" ;;
             *)          extra+=("$arg") ;;
         esac
     done
@@ -283,6 +347,11 @@ run_one() {
     [[ -z "$ops" ]] || env_args+=("L3FWD_MEMPOOL_OPS=$ops")
     [[ -z "$groups" ]] || env_args+=("L3FWD_MEMPOOL_GROUPS=$groups" "FILL_GROUPS=$groups")
     [[ -z "$reserve" ]] || env_args+=("FILL_RESERVE=$reserve")
+    [[ -z "$work" ]] || env_args+=("L3FWD_WORK_ACCESSES=$work")
+    [[ -z "$target" ]] || env_args+=("L3FWD_WORK_TARGET=$target")
+    [[ -z "$payload" ]] || env_args+=("L3FWD_WORK_PAYLOAD=$payload")
+    [[ -z "$mib" ]] || env_args+=("L3FWD_WORK_MIB=$mib")
+    env_args+=("L3FWD_OCCUPANCY_US=$OCCUPANCY_US")
 
     log "$label: starting $system ${env_args[*]:-}"
     # Append mode for every writer of $out: l3fwd's final counters would
@@ -300,7 +369,12 @@ run_one() {
         sleep 1; waited=$((waited + 1))
     done
     grep -m1 -oE 'FILL-ring Rx enabled.*' "$out" | sed "s/^/[sweep]   /" || true
-    # PCM's idle baseline, as in the by-hand protocol.
+    if [[ -n "$hog" && "$hog" != 0 ]]; then
+        stress-ng --stream "$hog" --taskset "$HOG_CPUS" --metrics-brief >"$OUT_DIR/$label.hog" 2>&1 &
+        HOG_PID=$!
+        log "$label: $hog stress-ng STREAM workers on CPUs $HOG_CPUS"
+    fi
+    # PCM's idle baseline, as in the by-hand protocol (with a hog: its own load).
     sleep 10
 
     if [[ -n "$stall" ]]; then
@@ -325,14 +399,16 @@ run_one() {
                   [[ "$line" != *" tx="*" rx="* ]] || printf '%s %s\n' "$(date +%s.%N)" "$line" >>"$OUT_DIR/$label.times"
               done | tee -a "$out"; then
         stop_stall
+        stop_hog
         stop_l3fwd
         die "$label: rate_sweep.py failed on $TGEN_HOST (see $out)"
     fi
     stop_stall
+    stop_hog
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }
@@ -345,6 +421,10 @@ for line in "${lines[@]}"; do
     i=$((i + 1))
     read -r -a f <<<"$line"
     (( ${#f[@]} >= 4 )) || die "bad line in $PLAN: $line"
+    if [[ "$RESUME" == 1 && -e "$SUMMARY" ]] && grep -qE "^== ${f[0]}(_r[0-9]+)? \(" "$SUMMARY"; then
+        log "---- run $i/${#lines[@]}: ${f[0]} already in the summary, skipped"
+        continue
+    fi
     log "---- run $i/${#lines[@]}"
     run_one "${f[@]}"
 done

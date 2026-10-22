@@ -26,9 +26,12 @@
 # loss-against-DRAM sweep (CLAUDE.md 19.19):
 #   sudo FILL_WINDOW_MS=2000 FILL_HEADROOM=200 harness/run_l3fwd.sh dyn-128
 # FILL_GROUPS=<G> splits the credits into G pools (fill_groups, 19.25) and
-# FILL_RESERVE=<R> sets the pool reserve (fill_reserve, default 64 since fork
-# 70849f04d; 0 gives the earlier policy). l3fwd's own knobs pass through the
-# environment: L3FWD_MEMPOOL_CACHE, L3FWD_MEMPOOL_OPS, L3FWD_MEMPOOL_GROUPS.
+# FILL_RESERVE=<R> sets the pool reserve (fill_reserve: 64 in forks 70849f04d
+# to 181be3bbf, 0 since c4df0acf6). l3fwd's own knobs pass through the
+# environment: L3FWD_MEMPOOL_CACHE, L3FWD_MEMPOOL_OPS, L3FWD_MEMPOOL_GROUPS,
+# and the synthetic NF and ring occupancy of fork 290de897f (l3fwd_work.h):
+# L3FWD_WORK_ACCESSES, L3FWD_WORK_TARGET, L3FWD_WORK_PAYLOAD, L3FWD_WORK_MIB,
+# L3FWD_OCCUPANCY_US.
 #
 # shringfix-8 is shring-8 with rmp_fix=1: its head advance serialised, which
 # removes the race that can stop the shared ring for good (19.25).

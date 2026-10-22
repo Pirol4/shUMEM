@@ -34,7 +34,7 @@ Use `tmux` nas janelas que ficam rodando.
 
 1. **`tgen`, janela 1: servidor TRex** (deixe rodando):
    ```bash
-   cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check
+   cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check --hdrh
    ```
 2. **`dut`: l3fwd com o sistema a medir** (`privring-1024`, `privring-128` ou `shring-8`):
    ```bash
