@@ -299,7 +299,9 @@ summarize() {
         "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
         dram_per_window "$label" "$duration" | sed 's/^/   /' || true
         [[ ! -s "$OUT_DIR/$label.stall" ]] || tail -1 "$OUT_DIR/$label.stall" | sed 's/^/   stall_core: /'
-        [[ ! -s "$OUT_DIR/$label.hog" ]] || grep -E 'stream .*[0-9]' "$OUT_DIR/$label.hog" | tail -1 | sed 's/^/   hog: /'
+        # stress-ng's metrics line; its format varies by version, so take
+        # whatever mentions the stressor, and never let a miss end the sweep.
+        [[ ! -s "$OUT_DIR/$label.hog" ]] || { grep -E 'stream' "$OUT_DIR/$label.hog" | tail -2 | sed 's/^/   hog: /' || true; }
     } | tee -a "$SUMMARY"
 }
 
