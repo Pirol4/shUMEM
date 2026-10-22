@@ -154,7 +154,7 @@ def f5():
 def f6():
     # The target queue gets ~1 Gbps: weight w against 1 on each of the other
     # seven gives it w / (7 + w) of 98 Gbps; w = 0.0722 -> 1.0 Gbps.
-    accesses = (0, 50, 100, 200, 400, 800, 1600, 3200, 6400)
+    accesses = (0, 50, 100, 200, 400, 800, 1600, 2400, 3200, 4800, 6400)
     cells = [("pv%d" % a, s, "rates=98 duration=30 work=2 target=%d:%d --queue-weights %s %s %s"
               % (TARGET_LCORE, a, weights(0.0722), WARM, LAT))
              for a in accesses for s in CORE]
