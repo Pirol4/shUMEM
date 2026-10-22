@@ -1716,3 +1716,30 @@ Not replicated, on purpose: MICA (an application, outside Rx in DPDK), netperf (
 - f4: as 19.27 (dyn-128 cold ~66 k with reserve 0, two borrowers ~1.5 k, shRing ~2.13 M on every queue); new: shRing's bystanders' latency probes lose ~0.9% while ours lose 0, and the stalled queue's p99.99 is longer the more buffers it held (fill < shRing < dyn, 19.23).
 - f6/f7: shRing's delivered throughput falls once the target cannot keep up (papers: −60% / −49%), with loss on every queue; privRing, fill and dyn lose only the target's excess, throughput ≥ ~97 Gb/s. The question for dyn-128: does a target that never empties its queue take the whole pool (it is a borrower that cannot pay)?
 - f8: with payload reads, privring-1024 loses throughput first (its working set exceeds the LLC); the 128-buffer systems later. f9 single core: privring-128 and fill-128 well below privring-1024; dyn-128 and shRing close to it (buffer sharing absorbs a single core's bursts).
+
+### 20.6 Status: the run on the nodes (2026-10-22)
+
+**Instantiation (reserved 2026-10-22 to 2026-10-29):** dut `sm110p-10s10603.wisc.cloudlab.us` (experiment MAC `b8:3f:d2:13:04:b3`), tgen `sm110p-10s10607.wisc.cloudlab.us` = `TGEN_HOST` (`ens2f0np0`, MAC `b8:3f:d2:13:08:9e` = `TGEN_MAC`), user `pirola`. Profile updated before instantiating; `/local/repository` at `763b7d1` survived the reboot; `kernel-tuning.sh --check` all OK (isolated 1-8, nosmt, 16 × 1 GiB, msr); `hdrh` imported on the tgen, stress-ng 0.13.12 on the dut, fork at `290de897f`. `git log` in `/mydata/dpdk-research/shring-dpdk` needs `sudo` (repository owned by root). The first `apt-get update` of `dev-environment.sh` is silent (`-qq`) for several minutes: normal.
+
+**f0 (smoke), 14 runs, all as expected:**
+- HDR latency works: 100,000 samples per queue in 10 s at 10 kpps, p99.99 at 1 µs resolution, no probe lost. Balanced 98%: every system p50 34–37 µs, p99 48–51, p99.99 54–57.
+- Occupancy works on all six systems (shring-8 included): mean 0.1–0.2, max 3–5 under balanced load.
+- DRAM write, balanced: privring-1024 10.5 GB/s, privring-128 1.0, fill-128 0.53, shringfix-8 0.13, shring-8 0.10, dyn-128 0.06.
+- Work: 2 reads ≈ 19 cycles per packet; 800 reads = 12,669 cycles on lcore 4 (~16 per read). With ~92 kpps (1 Gb/s + its probe) lcore 4 saturates near ~1,800 reads → **f6 got 2,400 and 4,800 too (`3f60bec`, 275 runs)**; f13's 800 is right (half the core before the switch, ~5× overloaded after).
+- tv20: 9.9 Mpps offered (20% of packets 64 B to queue 3), no loss. skew: weights changed every ~1 s, queue totals 5.5–15.8 M (2.9× over the window); queue 3's p99 72 µs against 49 balanced. hog4: DRAM write ~35 GB/s, each stress-ng worker reports ~15 GB/s; privring-1024 unaffected at work 2.
+- **Single-core NDR, dyn-128: 97.19% of line rate (7.97 Mpps of 1500 B on one queue).**
+- To explain later (f8 measures it): privring-1024 with `payload=1` wrote 0.2 GB/s to DRAM instead of 10.5.
+- Bug found and fixed (`d8d5045`): the summary's stress-ng line did not match the real output; under `pipefail` the failed `grep` ended the sweep after `f0_hog4`. Rerunning `run_eval.sh f0` resumed with the two missing runs.
+
+**`run_eval.sh all2` started on 2026-10-22 ~12:15** in tmux `eval` on the dut (TRex in tmux `trex` on the tgen, started with `--hdrh`). ~42 h. To follow and to resume:
+```bash
+grep -c '^== f' /mydata/exp/sweep/summary.txt        # runs done (dut)
+tmux attach -t eval                                  # Ctrl-b d to leave
+cd /local/repository && TGEN_HOST=sm110p-10s10607.wisc.cloudlab.us TGEN_MAC=b8:3f:d2:13:08:9e harness/run_eval.sh all2   # resumes
+```
+If the dut reboots: check `/local/repository` again (19.26) before resuming. Copy once a day (Windows PowerShell), then analyse here with `python3 analysis/eval_report.py /mnt/c/Users/filip/shumem_eval2 --out docs/eval2`:
+```powershell
+scp -r pirola@sm110p-10s10603.wisc.cloudlab.us:/mydata/exp C:\Users\filip\shumem_eval2\dut_exp
+scp -r pirola@sm110p-10s10607.wisc.cloudlab.us:/mydata/exp C:\Users\filip\shumem_eval2\tgen_exp
+```
+**Next:** first analysis after f1 + f4 (~6 h in); before the end also copy `/mydata/dpdk-research/results` from the dut. CAIDA: still to decide.
