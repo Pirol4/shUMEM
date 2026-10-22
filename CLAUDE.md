@@ -215,6 +215,7 @@ Each phase has an explicit **Done when** so we know it is complete.
 - **Load regimes:** balanced **and** imbalanced. The reference imbalance is the CAIDA 2018-03-15 NYC trace replayed by TRex, where the per-core min/max packet-rate ratio stays between 325–433%. CAIDA access needs a request with lead time.
 - **Core count:** 8 per NIC, matching both papers.
 - **Metrics — five, as in the rxBisect paper's Figure 10:** throughput (RFC2544 no-drop), latency including tail, ring occupancy, memory bandwidth (`pcm-memory`), and DDIO hit rate (`pcm-pcie`). The last three explain the mechanism; throughput and latency alone do not support the argument. `rx_contention` is a sixth, specific to quantifying shRing's bottleneck.
+- **The paper-style evaluation of 2026-10-22 (batteries f0–f15, per-queue HDR latency, synthetic NF, variability tests) is §20.**
 - **Fairness:** identical node, NIC, core counts, ring sizes, application and traffic; change one variable at a time. Critically, **`rx_vec_en=0` and `rxq_cqe_comp_en=0` on every system**, not just shRing — see §15.1 for why leaving them on for privRing would invalidate the whole comparison.
 
 &nbsp;
@@ -1639,3 +1640,79 @@ Below ~730 µs the stalled queue's need fits in what it can borrow and dyn-128 l
 **Predictions of §19.26 against this:** shringfix never wedges ✔; dyn balanced loss → 0 ✔; NDR 512 B shRing ≈ 84% ✔ (but not for the reason given); reserve cuts the cold-stall loss ✘ (it raises it on isolated cores); two borrowers below 13 k ✔ (1.5 k); stack restores DRAM under cache 32 ✔; groups cut cycles under cache 0 ✔.
 
 **Open:** the reserve default; shRing's small-packet drops (where, why constant 0.18%); the two unexplained mempool cells; the moving test needs pauses (stall_core following the hot queue) to exercise the policy; repetitions for e5/e6 (n = 1); figures (stall length, mempool, DDIO, NDR).
+
+&nbsp;
+
+---
+
+## 20\. The paper-style evaluation (planned 2026-10-22; harness ready, nothing run yet)
+
+The advisor approved the architecture and asked for a stronger evaluation: test what the shRing (OSDI '23) and rxBisect (OSDI '25) papers test, with the focus on latency, its tail (p99 and beyond) and loss %. The nodes are reserved for a week from 2026-10-22; the user asked for the batteries to be complete and to go beyond the papers where useful (bad results are kept and documented too; what goes into the paper is decided later). CAIDA: decide later whether to pursue access; until then a synthetic imbalance with the same statistics (20.2, f12).
+
+### 20.1 What the papers test, and what was missing here
+
+| experiment | paper | metrics | before 20 | battery |
+|---|---|---|---|---|
+| NDR against ring size, multicore and **single core** | shRing Fig. 3; rxBisect Fig. 9, 12 | throughput | multicore only (e3) | f9 |
+| full load, balanced | shRing Fig. 9; rxBisect Fig. 10 | throughput, latency, **ring occupancy**, DDIO, DRAM | all but occupancy, n = 3 | f1, f2 |
+| memory intensity of the NF | shRing Fig. 7/8 | throughput, latency, cycles | — | f8 |
+| **processing variability** (slow target core) | shRing Fig. 11; rxBisect Fig. 14 | throughput | only the artificial 1 ms stalls | f6 |
+| **traffic variability** (X% of packets, 64 B, to the target) | shRing Fig. 12; rxBisect Fig. 15 | throughput | — | f7 |
+| real imbalanced trace + co-located STREAM/PageRank | rxBisect Fig. 16/17 | throughput | — | f11, f12 |
+| allocator cost | rxBisect Table 3 | % cycles | yes (MEMPOOL/CYCLES) | every run, f14 |
+| load turning pathological mid-run | shRing Fig. 13 | throughput per second | — | f13 |
+| methodology | both | 10 runs, trimmed mean (min/max dropped), stdev < 5% | n = 1–6 | n = 10 tables, 5 curves, 3 NDR |
+
+Not replicated, on purpose: MICA (an application, outside Rx in DPDK), netperf (Linux kernel stack), rxBisect itself (its emulator was never published, §11). As in the rxBisect paper, an idealised dynamic shRing is the better of privRing-1024 and shRing at each point, computed in the analysis. **Neither paper reports any percentile** — only mean latency; p99/p99.99 is beyond them.
+
+**Weaknesses of the data before this section:** one latency stream of 1000 pps, always on queue 0 (a stall of lcore 4 measured an untouched queue); p99.99 resting on ~3 samples; TRex's default histogram has one significant digit (p99 "40" = 40–49 µs; 100 and 199 µs in one bucket); plain l3fwd is so light that every system forwards 1500 B at line rate, so there was no throughput result at all; few repetitions, no warm-up, a fixed order.
+
+### 20.2 What changed (fork `c4df0acf6`, `290de897f`; shUMEM this commit)
+
+- **Fork:** `fill_reserve` defaults to **0** (19.27: on isolated cores the reserve only costs). l3fwd: `l3fwd_work.{c,h}` — `L3FWD_WORK_ACCESSES=N` (N random 8-byte reads per packet from a 40 MiB buffer shared by all lcores: the papers' synthetic NF, FastClick WorkPackage), `L3FWD_WORK_TARGET=<lcore>:<N>` (the papers' target core), `L3FWD_WORK_PAYLOAD=1` (read the payload, one word per cache line), `L3FWD_WORK_MIB`; `L3FWD_OCCUPANCY_US=U` samples `rte_eth_rx_queue_count` (completions waiting on the CQ: the papers' ring occupancy; works for every system, the RMP path included, since each queue has its own CQ) every U µs while packets arrive. `WORK` and `OCCUPANCY` lines per lcore at exit; `CYCLES` unchanged (fwd_cyc now includes the work). Index without a division (high half of x × words). Checked on `net_null` (offload off for the test only): 50 reads ≈ 970 cycles per packet on this laptop; `rx_queue_count` is -ENOTSUP there, as expected.
+- **TRex:** start the server with **`--hdrh`** (in TRex since 3.06: an HDR histogram per latency stream, 1 µs resolution, 3 significant digits, `json["hdrh"]`); `setup/trex-setup.sh` installs `hdrhistogram` for Python. `udp_multiflow.py`: per-queue mode (`queue_weights`, `queue_sizes`: one stream per Rx queue from 64 source IPs that the validated Toeplitz model puts on that queue) and per-queue latency streams (`lat_queues=all`, pg_id 10 + queue, at `lat_pps`, each the size of its queue's data). Legacy behaviour is unchanged when neither is set.
+- **`rate_sweep.py`:** `--lat-queues/--lat-pps`, `--hdrh required` (stops at once if TRex was started without it), `--warmup S` (a window of S s before the measured ones, phase `warmup`), `--queue-weights/--queue-sizes`, `--schedule` (`schedule.py`: `skew:<seed>` = per-queue rates redrawn every second with max/min in 3.25–4.33, the range rxBisect's Fig. 4 measures on CAIDA 2018, log-weights following an AR(1) walk so busy queues persist; `switch:<t>:<weights>`; or a JSON file) applied with `update_streams` without stopping the traffic, keeping 98% of line rate in bandwidth; `--timeseries` (per-second tx/rx and latency max). New CSV columns (p90, p99.99, source, samples). A `.jsonl` next to the CSV keeps per window the latency of every stream (percentiles + encoded HDR histogram), the packets offered to each queue, and the series.
+- **`sweep.sh`:** `work=`, `target=`, `payload=`, `mib=`, `hog=<n>` (n `stress-ng --stream` workers on CPUs 9–15, rxBisect Fig. 17); occupancy always on (`OCCUPANCY_US`, default 1000); summary gains `LAT` lines (per queue), per-queue Tx, per-lcore `CYCLES/WORK/OCCUPANCY`, the hog's metrics, DRAM per window labelled with its phase and its own length; `RESUME=1` skips runs already in the summary (`run_eval.sh` sets it). Preflight refuses an l3fwd older than `290de897f`, a tgen without `hdrh`, and `hog=` without stress-ng (`setup/dev-environment.sh` installs it).
+- **Batteries** `harness/sweeps/eval2/f0`–`f15`, written by `make_batteries.py`: each round runs every cell (system × value) once in an order shuffled with a fixed seed; labels `f<b>_<cell>_<system>_n<round>`. Systems: privring-1024, privring-128, **shringfix-8 as "shRing"** (decided 2026-10-22: the race fix only strengthens the baseline), fill-128, dyn-128; shring-8 (published) only in f4. Defaults: 1500 B, 98%, 10 s warm-up, latency 10 kpps on each of the 8 queues (~1 Gb/s on top of the 98%).
+- **`analysis/eval_report.py <data dir> --out <dir>`:** trimmed mean ± sd per cell, percentiles both per run (trimmed mean) and **pooled over every run's HDR histogram**, latency and probe loss by role (stalled/target queue against bystanders), DDIO from the pcm-pcie CSVs, `runs.csv`, `cells.csv`, and figures in the papers' layouts (Fig. 10 bars, latency CCDF, Fig. 14/15 curves, NDR bars, time series). Needs `matplotlib` and `hdrhistogram`.
+- Everything tested end to end against mocks (fake sudo, ssh, l3fwd, TRex with HDR, stress-ng) in the session scratchpad; **nothing on a node yet.** Unverified until f0: TRex's real `hdrh` string decodes in Python; `update_streams` while traffic runs; 80 kpps of latency packets with no TRex errors; `rx_queue_count` on mlx5 for each system.
+
+### 20.3 The batteries (run in this order with `harness/run_eval.sh all2`; ~41 h in all)
+
+| | runs | ~time | what |
+|---|---|---|---|
+| f0 smoke | 14 | 20 min | everything new once; read before the rest |
+| **f1 balanced** | 50 | 1.5 h | n = 10, 60 s: throughput, loss, latency per queue, occupancy, DRAM, cycles |
+| **f4 stalls** | 180 | 4 h | cold / hot core / two borrowers × 6 systems, n = 10, latency of the stalled queue and of bystanders |
+| **f6 processing var.** | 225 | 5 h | target lcore 4 gets ~1 Gb/s and 0–6400 reads per packet, all others 2 |
+| **f7 traffic var.** | 225 | 5 h | 1–50% of the packets to queue 3 as 64 B, the rest 1500 B, work 2 |
+| f9 NDR ring size | 60 | 2.3 h | multi and single core; privRing 64–1024, fill-128, dyn-32-8, dyn-64-16, dyn-128, shRing; n = 3 |
+| f3 load–latency | 25 | 1.7 h | 10–100% of line rate |
+| f10 NDR frame size | 75 | 3.3 h | 64–1024 B |
+| f8 memory intensity | 300 | 6.7 h | 0–16 reads per packet on every lcore, payload untouched/read |
+| f11 co-location | 125 | 2.8 h | 0–7 STREAM workers, work 2 |
+| f12 skew | 50 | 1.5 h | CAIDA-like schedule (seed = round), with and without 4 STREAM workers |
+| f13 switch | 25 | 40 min | target goes from ~1 Gb/s to its full share at 20 s with 800 reads per packet |
+| f5 stall length | 175 | 3.9 h | 100 µs – 2 ms, n = 5 |
+| f2 DDIO | 25 | 35 min | pcm-pcie, n = 5 |
+| f14 mempool | 54 | 1.2 h | 19.27 item 6 again, n = 3 |
+| f15 hot queue | 30 | 50 min | fixed and moving hot queue, no stall (control) |
+
+**Check before f13:** its `target=4:800` assumes 800 reads per packet overload lcore 4 at a full share (~1 Mpps) but not at ~1 Gb/s (~82 kpps). f0's `pv800` run and f6 say whether; change the value in `make_batteries.py` and regenerate if not.
+
+### 20.4 Runbook
+
+1. CloudLab: **Update the profile**, instantiate; on both nodes `git -C /local/repository log --oneline -1` must show this commit or later (else `sudo git -C /local/repository fetch origin && sudo git -C /local/repository checkout -B main origin/main`). Dut without `/mydata`: `sudo mkdir -p /mydata`.
+2. `sudo setup/dev-environment.sh dut` / `… tgen`; `sudo setup/trex-setup.sh` on the tgen. On nodes set up before this commit instead: tgen `sudo pip3 install hdrhistogram`; dut `sudo apt-get install -y stress-ng` and `sudo git -C /mydata/dpdk-research/shring-dpdk pull && sudo ninja -C /mydata/dpdk-research/shring-dpdk/build`.
+3. dut: `sudo setup/kernel-tuning.sh && sudo reboot`; after the boot re-check `/local/repository` (CloudLab resets it, 19.26), rerun `sudo /local/repository/setup/node-setup.sh` if it was reset, then `setup/kernel-tuning.sh --check`.
+4. Both: `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp`; dut key in the tgen's `~/.ssh/authorized_keys2`; note `TGEN_MAC` and `TGEN_HOST`.
+5. tgen, tmux: `cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check --hdrh`.
+6. dut, tmux, own user: `TGEN_HOST=… TGEN_MAC=… harness/run_eval.sh f0`; check its summary against the header of `f0_smoke.txt`; then `… harness/run_eval.sh all2`. Interrupted? Run the same command again: it resumes.
+7. Every day or so, and before ending: copy `/mydata/exp` (both nodes) and `/mydata/dpdk-research/results` (dut) to `C:\Users\filip\shumem_eval2`; here: `python3 analysis/eval_report.py /mnt/c/Users/filip/shumem_eval2 --out docs/eval2`.
+
+### 20.5 Predictions (from §17–19.27)
+
+- f1: every system 98 Gb/s, loss 0; mean latency a tie; occupancy lowest for dyn-128 and shRing; DRAM write privring-1024 ≫ privring-128 ≈ fill-128 > shRing ≈ dyn-128; Rx cycles shRing ~3× the others.
+- f4: as 19.27 (dyn-128 cold ~66 k with reserve 0, two borrowers ~1.5 k, shRing ~2.13 M on every queue); new: shRing's bystanders' latency probes lose ~0.9% while ours lose 0, and the stalled queue's p99.99 is longer the more buffers it held (fill < shRing < dyn, 19.23).
+- f6/f7: shRing's delivered throughput falls once the target cannot keep up (papers: −60% / −49%), with loss on every queue; privRing, fill and dyn lose only the target's excess, throughput ≥ ~97 Gb/s. The question for dyn-128: does a target that never empties its queue take the whole pool (it is a borrower that cannot pay)?
+- f8: with payload reads, privring-1024 loses throughput first (its working set exceeds the LLC); the 128-buffer systems later. f9 single core: privring-128 and fill-128 well below privring-1024; dyn-128 and shRing close to it (buffer sharing absorbs a single core's bursts).
