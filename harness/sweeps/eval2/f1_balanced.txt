@@ -1,0 +1,65 @@
+# Balanced load, 98%, 60 s after a 10 s warm-up, n = 10: throughput, loss,
+# latency per queue (p50-p99.99), ring occupancy, DRAM, cycles. The
+# shRing paper's Fig. 9 and the rxBisect paper's Fig. 10 with l3fwd as the NF.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f1_bal_shringfix-8_n01                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n01                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n01                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n01                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n01                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f1_bal_dyn-128_n02                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n02                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n02                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n02                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n02                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f1_bal_dyn-128_n03                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n03                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n03                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n03                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n03                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f1_bal_dyn-128_n04                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n04                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n04                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n04                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n04                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f1_bal_dyn-128_n05                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n05                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n05                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n05                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n05                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 6
+f1_bal_privring-1024_n06                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n06                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n06                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n06                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n06                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 7
+f1_bal_fill-128_n07                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n07                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n07                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n07                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n07                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 8
+f1_bal_fill-128_n08                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n08                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-128_n08                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n08                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n08                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 9
+f1_bal_privring-128_n09                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n09                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n09                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n09                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n09                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 10
+f1_bal_privring-128_n10                  privring-128   -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_privring-1024_n10                 privring-1024  -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_shringfix-8_n10                   shringfix-8    -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_fill-128_n10                      fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f1_bal_dyn-128_n10                       dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

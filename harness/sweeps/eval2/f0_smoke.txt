@@ -1,0 +1,23 @@
+# Smoke test of everything new (~20 min). Read its summary before the rest:
+# every LAT line has source hdrh (p99.99 not a multiple of 10) and lost=0
+# under balanced load; OCCUPANCY lines for every system, shring-8 included;
+# WORK lines with work_cyc/pkt; the tv20 run shows queue 3 at ~20% of the
+# packets; the skew run changes rates every second (series in the .jsonl);
+# the hog run has a hog: line; the ndr1q run ends with an NDR line; the
+# ddio run writes pcm-pcie_*.csv.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+f0_occ_privring-1024                     privring-1024  -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_occ_privring-128                      privring-128   -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_occ_shringfix-8                       shringfix-8    -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_occ_fill-128                          fill-128       -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_occ_dyn-128                           dyn-128        -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_occ_shring-8                          shring-8       -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f0_work2_dyn-128                         dyn-128        -  -  rates=98 duration=10 work=2 --lat-queues all --lat-pps 10000 --hdrh required
+f0_payload_privring-1024                 privring-1024  -  -  rates=98 duration=10 payload=1 --lat-queues all --lat-pps 10000 --hdrh required
+f0_pv800_shringfix-8                     shringfix-8    -  -  rates=98 duration=10 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --lat-queues all --lat-pps 10000 --hdrh required
+f0_tv20_dyn-128                          dyn-128        -  -  rates=98 duration=10 work=2 --queue-weights 1.0,1.0,1.0,1.75,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 --lat-queues all --lat-pps 10000 --hdrh required
+f0_skew_dyn-128                          dyn-128        -  -  rates=98 duration=10 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --lat-queues all --lat-pps 10000 --hdrh required
+f0_hog4_privring-1024                    privring-1024  -  -  rates=98 duration=10 work=2 hog=4 --lat-queues all --lat-pps 10000 --hdrh required
+f0_ndr1q_dyn-128                         dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --resolution 5 --lat-queues all --lat-pps 1000 --hdrh required
+f0_ddio_dyn-128                          dyn-128        -  -  rates=98 duration=10 pcm=pcie --lat-queues all --lat-pps 10000 --hdrh required

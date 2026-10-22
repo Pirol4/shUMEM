@@ -1,0 +1,35 @@
+# Latency against offered load, 10-100% of line rate (10,30,50,70,80,90,95,98,100), 20 s each,
+# n = 5: where each system's tail starts to grow. Not in the papers, which
+# report latency at full load only.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f3_load_privring-1024_n01                privring-1024  -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_dyn-128_n01                      dyn-128        -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_fill-128_n01                     fill-128       -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_shringfix-8_n01                  shringfix-8    -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-128_n01                 privring-128   -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f3_load_dyn-128_n02                      dyn-128        -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_shringfix-8_n02                  shringfix-8    -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-1024_n02                privring-1024  -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_fill-128_n02                     fill-128       -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-128_n02                 privring-128   -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f3_load_privring-128_n03                 privring-128   -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_shringfix-8_n03                  shringfix-8    -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-1024_n03                privring-1024  -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_dyn-128_n03                      dyn-128        -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_fill-128_n03                     fill-128       -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f3_load_shringfix-8_n04                  shringfix-8    -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-128_n04                 privring-128   -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-1024_n04                privring-1024  -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_fill-128_n04                     fill-128       -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_dyn-128_n04                      dyn-128        -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f3_load_privring-128_n05                 privring-128   -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_privring-1024_n05                privring-1024  -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_fill-128_n05                     fill-128       -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_shringfix-8_n05                  shringfix-8    -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f3_load_dyn-128_n05                      dyn-128        -  -  rates=10,30,50,70,80,90,95,98,100 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

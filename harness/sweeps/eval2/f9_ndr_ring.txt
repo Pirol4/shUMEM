@@ -1,0 +1,71 @@
+# RFC 2544 no-drop rate (loss <= 1e-6, 10 s trials), 1500 B, with traffic
+# spread over 8 cores (multi) or all on queue 0 (single): shRing Fig. 3,
+# rxBisect Fig. 9 and 12 (buffer sharing absorbs a single core's bursts).
+# privRing at 64-1024 entries against the shared designs with 1024 or
+# fewer buffers in total (dyn-E-F: E per queue, 8E credits, floor F, so one
+# queue can hold 8E - 7F). n = 3.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f9_single_privring-256_n01               privring-256   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-1024_n01              privring-1024  -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-128_n01               privring-128   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-128_n01                    dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-64-16_n01                   dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-64-16_n01                  dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-32-8_n01                    dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_shringfix-8_n01                 shringfix-8    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-1024_n01               privring-1024  -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-32-8_n01                   dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-64_n01                privring-64    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-128_n01                privring-128   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-128_n01                     dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-64_n01                 privring-64    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-512_n01               privring-512   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_fill-128_n01                   fill-128       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-256_n01                privring-256   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_fill-128_n01                    fill-128       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_shringfix-8_n01                shringfix-8    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-512_n01                privring-512   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+f9_single_fill-128_n02                   fill-128       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-64-16_n02                  dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-32-8_n02                    dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-512_n02                privring-512   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-32-8_n02                   dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_shringfix-8_n02                shringfix-8    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-128_n02                    dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-128_n02               privring-128   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-512_n02               privring-512   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-1024_n02              privring-1024  -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-1024_n02               privring-1024  -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-128_n02                privring-128   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-64-16_n02                   dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-256_n02                privring-256   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-256_n02               privring-256   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-64_n02                privring-64    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_shringfix-8_n02                 shringfix-8    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-64_n02                 privring-64    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-128_n02                     dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_fill-128_n02                    fill-128       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+f9_multi_privring-64_n03                 privring-64    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-128_n03                    dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_fill-128_n03                    fill-128       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_fill-128_n03                   fill-128       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-64-16_n03                  dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-64-16_n03                   dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-128_n03                     dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_shringfix-8_n03                shringfix-8    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dyn-32-8_n03                    dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-1024_n03              privring-1024  -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-128_n03                privring-128   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-512_n03                privring-512   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_shringfix-8_n03                 shringfix-8    -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-256_n03               privring-256   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dyn-32-8_n03                   dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-128_n03               privring-128   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-64_n03                privring-64    -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_privring-512_n03               privring-512   -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-1024_n03               privring-1024  -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_privring-256_n03                privring-256   -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required

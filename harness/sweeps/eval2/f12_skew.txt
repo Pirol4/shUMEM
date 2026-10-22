@@ -1,0 +1,61 @@
+# Imbalance like the CAIDA trace of rxBisect Fig. 4/16 (CLAUDE.md 20.2): per-
+# queue rates redrawn every second with max/min 3.25-4.33, busy queues
+# persisting (schedule.py). Round k uses seed k for every system, so the
+# systems see the same sequence. With and without 4 STREAM workers. n = 5.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f12_skew_privring-128_n01                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_fill-128_n01                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_dyn-128_n01                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-1024_n01               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_fill-128_n01                fill-128       -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-1024_n01           privring-1024  -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-128_n01            privring-128   -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_shringfix-8_n01             shringfix-8    -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_dyn-128_n01                 dyn-128        -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f12_skew_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-1024_n02               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-128_n02            privring-128   -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-1024_n02           privring-1024  -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_fill-128_n02                fill-128       -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_dyn-128_n02                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_dyn-128_n02                 dyn-128        -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_shringfix-8_n02             shringfix-8    -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_fill-128_n02                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-128_n02                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f12_skew_privring-1024_n03               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_dyn-128_n03                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_dyn-128_n03                 dyn-128        -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_fill-128_n03                fill-128       -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_fill-128_n03                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-1024_n03           privring-1024  -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_shringfix-8_n03             shringfix-8    -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-128_n03                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-128_n03            privring-128   -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f12_skew_privring-1024_n04               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_shringfix-8_n04                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_fill-128_n04                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-1024_n04           privring-1024  -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_shringfix-8_n04             shringfix-8    -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_fill-128_n04                fill-128       -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_dyn-128_n04                 dyn-128        -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_dyn-128_n04                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-128_n04            privring-128   -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-128_n04                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:4 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f12_skewhog4_dyn-128_n05                 dyn-128        -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_dyn-128_n05                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-128_n05                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_shringfix-8_n05                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_privring-1024_n05               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skew_fill-128_n05                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_shringfix-8_n05             shringfix-8    -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-128_n05            privring-128   -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_fill-128_n05                fill-128       -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f12_skewhog4_privring-1024_n05           privring-1024  -  -  rates=98 duration=60 work=2 hog=4 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:5 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
