@@ -345,7 +345,8 @@ def cells(records):
         for role in ("all", "special", "bystander"):
             for key, value in pooled([e for r in runs for e in r.get("hdrh", {}).get(role, [])]).items():
                 cell["pooled_%s_%s" % (role, key)] = value
-        cell["wedged"] = sum(1 for r in runs if (r.get("loss_pct") or 0) > 20)
+        # Over 20% lost: shRing wedged (19.25) or blocked by a slow core (f6).
+        cell["collapsed"] = sum(1 for r in runs if (r.get("loss_pct") or 0) > 20)
         out.append(cell)
     return sorted(out, key=lambda c: (int(c["battery"][1:]), sort_x(c["x"]), system_rank(c["system"])))
 
@@ -383,7 +384,7 @@ def print_tables(table):
             fmt(c.get("pooled_all_p99.99"), 0), fmt(c.get("pooled_special_p99.99"), 0),
             fmt(c.get("pooled_bystander_p99.99"), 0), fmt(c["bystander_probe_loss_pct"], 4),
             fmt(c["dram_write"], 0), fmt(c["rx_cyc"], 0), fmt(c["occ_mean"], 1),
-            "  wedged %d" % c["wedged"] if c["wedged"] else ""))
+            "  collapsed %d/%d" % (c["collapsed"], c["n"]) if c["collapsed"] else ""))
     print("\n* pooled over every run's HDR histogram; spec = stalled/target queue, "
           "byst = the other queues; bystL% = loss of the bystanders' latency probes")
 
