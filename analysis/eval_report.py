@@ -235,6 +235,9 @@ def windows(rows, details, summaries, ddio):
             rec["lat_" + key] = number(row.get("lat_%s_us" % key))
         add_latency_roles(rec, battery, name, details.get(row["label"], {}),
                           row["phase"], row["rate_pct"])
+        delivered = delivered_gbps(row, rec)
+        if delivered is not None:
+            rec["gbps"] = delivered
         add_dut(rec, summary, battery, name, sweep_index[row["label"]])
         sweep_index[row["label"]] += 1
         rec["ddio_hit_pct"] = ddio.get(row["label"])
@@ -249,6 +252,7 @@ def add_latency_roles(rec, battery, name, details, phase, rate_pct):
             and float(d["rate_pct"]) == float(rate_pct)]
     rec["hdrh"] = {"all": [], "special": [], "bystander": []}
     lost = {"special": [0, 0], "bystander": [0, 0]}
+    rec["queue_probe_loss"] = {}
     for d in recs:
         if d.get("queue") == "all":
             if d.get("hdrh"):
@@ -260,6 +264,7 @@ def add_latency_roles(rec, battery, name, details, phase, rate_pct):
         if d.get("tx"):
             lost[role][0] += d["tx"] - (d.get("rx") or 0)
             lost[role][1] += d["tx"]
+            rec["queue_probe_loss"][d["queue"]] = max(d["tx"] - (d.get("rx") or 0), 0) / d["tx"]
         for key in ("p99", "p9999", "max_us"):
             rec.setdefault("%s_%s" % (role, key), [])
             if d.get(key) is not None:
@@ -276,6 +281,24 @@ def add_latency_roles(rec, battery, name, details, phase, rate_pct):
                  and float(d["rate_pct"]) == float(rate_pct)]
         if found:
             rec[kind] = found[-1]
+
+
+def delivered_gbps(row, rec):
+    """Delivered L1 Gb/s when queues carry different frame sizes (f7).
+
+    rate_sweep.py's rx_gbps_l1 multiplies received packets by the mean frame,
+    which is wrong when the lost packets are the small ones. Here each queue's
+    offered packets (the window's estimate) count at their own size, minus the
+    share its latency probes lost.
+    """
+    sizes = [int(x) for x in row.get("queue_sizes", "").split(",") if x]
+    offered = (rec.get("window") or {}).get("queue_offered_est")
+    loss = rec.get("queue_probe_loss", {})
+    if len(sizes) != QUEUES or not offered or len(loss) < QUEUES:
+        return None
+    bits = sum(n * (1 - loss.get(q, 0.0)) * (size + 24) * 8
+               for q, (n, size) in enumerate(zip(offered, sizes)))
+    return bits / float(row["duration_s"]) / 1e9
 
 
 def add_dut(rec, summary, battery, name, index):
