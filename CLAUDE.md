@@ -1764,3 +1764,13 @@ scp -r pirola@sm110p-10s10607.wisc.cloudlab.us:/mydata/exp /mnt/c/Users/filip/sh
 - **f3 load–latency:** a tie at every load 10–100% (dyn's p99.99 at 100%: 71 against 56–57 µs).
 
 **Proposed next (not approved):** (a) policy change for sustained overload, then rerun f6 (and f13); (b) f16 64 B diagnosis battery with `ethtool -S` deltas, then a rate-aware floor if the hypothesis holds; (c) f17 heavier memory intensity / co-location (32–128 reads, payload, with STREAM). **Do not `git pull` on the dut while `all2` runs:** bash reads `sweep.sh` as it goes.
+
+### 20.8 rxBisect by projection from its paper (2026-10-23)
+
+Decided with the user: while the rxBisect code is not available (ask Pismenny again), its published numbers serve as a projected reference — **always labelled "rxBisect (estimated from [Pismenny '25])", never as a measurement**. `analysis/rxbisect_reference.py <cells.csv>` holds the paper's numbers (Fig. 9, 10, 12, 14, 15, 17, Tables 2–3 and the text's figures; read off rendered figures, ±2 Gb/s) and projects each onto this node through a baseline both papers measure: `rxBisect_est = ours[anchor] × paper[rxBisect] / paper[anchor]`, with shRing and small privRing as anchors, an anchor used only when its normalised value here is within 10% of the paper's (same regime), and estimates above line rate rejected. The x axis of Fig. 14 is mapped by where shRing starts to fall (paper ~112 accesses, f6 ~1,700). Emulation costs rxBisect up to 12% throughput and 94% latency (its Table 2), so the estimates are lower bounds for hardware rxBisect: a margin smaller than that is not a win.
+
+First projection (f1, f6, f7, f9 of 20.7):
+- **Fig. 14 / f6:** through small privRing, rxBisect ≈ 0.992–0.996 of its unloaded throughput at 1.4–3.8 knees; dyn-128 0.992–0.996. **Parity.** The shRing anchor transfers poorly (its collapse depth depends on the x mapping: estimates 0.81–0.88).
+- **Fig. 15 / f7:** through small privRing, rxBisect 0.946–0.963 from 30% on; dyn-128 0.987–1.000 — but the paper attributes rxBisect's drop to its emulator core, so hardware rxBisect would sit near small privRing (~1.0): **parity, not a win.** The shRing anchor is off-regime (shRing does not collapse here).
+- **Fig. 10 / f1, memory:** paper rxBisect / shRing memory bandwidth 1.73–1.92 (emulated); here dyn-128 / shRing DRAM write 0.61. **Cycles:** paper rxBisect ≈ 0.90 × shRing (Fig. 18, low load); here dyn-128 0.41 × shRing (fwd cycles, full load). Favourable, but different metrics and emulation inflate rxBisect's side: supporting evidence only.
+- **Fig. 9 / f9:** another regime (single-core small privRing 40% there, ~100% here); nothing transfers.
