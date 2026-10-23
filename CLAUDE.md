@@ -1737,9 +1737,10 @@ grep -c '^== f' /mydata/exp/sweep/summary.txt        # runs done (dut)
 tmux attach -t eval                                  # Ctrl-b d to leave
 cd /local/repository && TGEN_HOST=sm110p-10s10607.wisc.cloudlab.us TGEN_MAC=b8:3f:d2:13:08:9e harness/run_eval.sh all2   # resumes
 ```
-If the dut reboots: check `/local/repository` again (19.26) before resuming. Copy once a day (Windows PowerShell), then analyse here with `python3 analysis/eval_report.py /mnt/c/Users/filip/shumem_eval2 --out docs/eval2`:
-```powershell
-scp -r pirola@sm110p-10s10603.wisc.cloudlab.us:/mydata/exp C:\Users\filip\shumem_eval2\dut_exp
-scp -r pirola@sm110p-10s10607.wisc.cloudlab.us:/mydata/exp C:\Users\filip\shumem_eval2\tgen_exp
+If the dut reboots: check `/local/repository` again (19.26) before resuming. Copy once a day from the WSL shell of the user's PC (C: is `/mnt/c`; a `C:\...` path makes scp read `c:` as a host), then analyse here with `python3 analysis/eval_report.py /mnt/c/Users/filip/shumem_eval2 --out docs/eval2`:
+```bash
+mkdir -p /mnt/c/Users/filip/shumem_eval2
+scp -r pirola@sm110p-10s10603.wisc.cloudlab.us:/mydata/exp /mnt/c/Users/filip/shumem_eval2/dut_exp
+scp -r pirola@sm110p-10s10607.wisc.cloudlab.us:/mydata/exp /mnt/c/Users/filip/shumem_eval2/tgen_exp
 ```
 **Next:** first analysis after f1 + f4 (~6 h in); before the end also copy `/mydata/dpdk-research/results` from the dut. CAIDA: still to decide.
