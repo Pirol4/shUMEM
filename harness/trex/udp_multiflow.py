@@ -43,6 +43,8 @@ Tunables (console: -t pkt_size=1500,flows=4096,hot_share=0.3,hot_queue=0):
   queue_sizes    "s0,...,s7": frame size per queue in per-queue mode (default pkt_size)
   lat_queues     "hot" (default), "all", "none" or "q,q,...": latency streams
   lat_pps        Rate of each latency stream (default 1000)
+  size_list      "s,s,...": per-queue mode only, each frame's size drawn at random
+                 from this list (a trace's size mix, harness/trace/trace_schedule.py)
 """
 import functools
 import ipaddress
@@ -52,6 +54,7 @@ LATENCY_PG_ID = 1
 LATENCY_PG_BASE = 10        # per-queue latency streams: pg_id 10 + queue
 LATENCY_PPS = 1000
 QUEUE_FLOWS = 64            # source IPs per queue in per-queue mode
+MIN_FRAME, MAX_FRAME = 60, 1514   # frame sizes without FCS
 # Packet rates of the per-queue streams are relative: rate_sweep.py's -m X%
 # scales the whole profile to X% of line rate (latency streams excepted).
 QUEUE_MODE_PPS = 1e6
@@ -132,8 +135,11 @@ def latency_queues(lat_queues, hot_queue):
     return queues
 
 
-def build_base_packet(pkt_size, src_ip=SRC_IP_FIRST):
-    headers = Ether() / IP(src=src_ip, dst=DST_IP) / UDP(sport=1025, dport=12)
+def build_base_packet(pkt_size, src_ip=SRC_IP_FIRST, udp_checksum=None):
+    # A frame trimmed by the field engine keeps its old UDP checksum; 0 means
+    # "none" in IPv4, so trimmed frames are built without one.
+    headers = Ether() / IP(src=src_ip, dst=DST_IP) / UDP(sport=1025, dport=12,
+                                                       chksum=udp_checksum)
     padding = max(0, pkt_size - len(headers))
     return headers / Raw(b"\x00" * padding)
 
@@ -144,6 +150,21 @@ def source_ip_list(ips):
         STLVmFlowVar(name="src_ip", value_list=[ip2int(ip) for ip in ips],
                      size=4, op="inc"),
         STLVmWrFlowVar(fv_name="src_ip", pkt_offset="IP.src"),
+        STLVmFixIpv4(offset="IP"),
+    ])
+
+
+def source_ip_list_sized(ips, size_list):
+    """Cycle the source IP through `ips` and draw each frame's size from
+    `size_list`: trim the frame, then rewrite the IP and UDP lengths."""
+    return STLScVmRaw([
+        STLVmFlowVar(name="src_ip", value_list=[ip2int(ip) for ip in ips],
+                     size=4, op="inc"),
+        STLVmFlowVar(name="fsize", value_list=list(size_list), size=2, op="random"),
+        STLVmWrFlowVar(fv_name="src_ip", pkt_offset="IP.src"),
+        STLVmTrimPktSize("fsize"),
+        STLVmWrFlowVar(fv_name="fsize", pkt_offset="IP.len", add_val=-14),
+        STLVmWrFlowVar(fv_name="fsize", pkt_offset="UDP.len", add_val=-34),
         STLVmFixIpv4(offset="IP"),
     ])
 
@@ -163,7 +184,7 @@ class UdpMultiFlow(object):
 
     def get_streams(self, direction=0, pkt_size=1500, flows=4096, hot_share=0.0,
                     hot_queue=0, queue_weights=None, queue_sizes=None,
-                    lat_queues="hot", lat_pps=LATENCY_PPS, **kwargs):
+                    lat_queues="hot", lat_pps=LATENCY_PPS, size_list=None, **kwargs):
         pkt_size = int(pkt_size)
         flows = int(flows)
         hot_share = float(hot_share)
@@ -179,8 +200,11 @@ class UdpMultiFlow(object):
         if queue_weights:
             if hot_share:
                 raise ValueError("queue_weights and hot_share are exclusive")
+            drawn = [int(s) for s in str(size_list).split(",")] if size_list else None
+            if drawn and any(not MIN_FRAME <= s <= MAX_FRAME for s in drawn):
+                raise ValueError("size_list: frames of %d-%d B" % (MIN_FRAME, MAX_FRAME))
             streams = self.per_queue_streams(
-                parse_queue_list(queue_weights, float, "queue_weights"), sizes)
+                parse_queue_list(queue_weights, float, "queue_weights"), sizes, drawn)
         else:
             streams = self.spread_streams(pkt_size, flows, hot_share, hot_queue)
 
@@ -217,18 +241,24 @@ class UdpMultiFlow(object):
         return streams
 
     @staticmethod
-    def per_queue_streams(weights, sizes):
-        """One stream per queue with a positive weight, at its share of packets."""
+    def per_queue_streams(weights, sizes, drawn=None):
+        """One stream per queue with a positive weight, at its share of packets;
+        with `drawn`, each frame's size is drawn from it."""
         if any(w < 0 for w in weights) or not sum(weights):
             raise ValueError("queue_weights must be >= 0 with a positive sum")
         streams = []
         for q, (weight, size) in enumerate(zip(weights, sizes)):
             if weight == 0:
                 continue
+            if drawn:
+                packet = STLPktBuilder(pkt=build_base_packet(max(drawn), queue_ips(q)[0], 0),
+                                       vm=source_ip_list_sized(queue_ips(q), drawn))
+            else:
+                packet = STLPktBuilder(pkt=build_base_packet(size, queue_ips(q)[0]),
+                                       vm=source_ip_list(queue_ips(q)))
             streams.append(STLStream(
                 name="data-q%d" % q,
-                packet=STLPktBuilder(pkt=build_base_packet(size, queue_ips(q)[0]),
-                                     vm=source_ip_list(queue_ips(q))),
+                packet=packet,
                 mode=STLTXCont(pps=QUEUE_MODE_PPS * weight / sum(weights)),
             ))
         return streams

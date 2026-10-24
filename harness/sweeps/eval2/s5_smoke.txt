@@ -1,0 +1,8 @@
+# Smoke of the trace replay (~3 min): both runs reach ~98 Gb/s offered at the
+# trace's mean frame (~860 B, ~13.7 Mpps); the .jsonl window shows a
+# schedule step about every second and the per-queue offered estimate
+# uneven like the trace; the dut's per-queue rx counts are uneven too.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+s5_trace_dyn-128                         dyn-128        -  -  rates=98 duration=20 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s5_trace48p_privring-1024                privring-1024  -  -  rates=98 duration=20 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

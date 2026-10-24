@@ -566,9 +566,45 @@ def f21():
     ], rounds("f21", cells, 3))
 
 
+# --- Round 5 (CLAUDE.md 20.18): a real trace's load pattern (MAWI) -------------------
+
+MAWI = "/mydata/trace/mawi-202610141400.json"
+
+
+def s5():
+    cells = [
+        line("s5_trace_dyn-128", "dyn-128", "rates=98 duration=20 --trace %s --timeseries %s %s"
+             % (MAWI, WARM, LAT)),
+        line("s5_trace48p_privring-1024", "privring-1024", "rates=98 duration=20 work=48 "
+             "payload=1 --trace %s %s %s" % (MAWI, WARM, LAT)),
+    ]
+    write("s5_smoke.txt", [
+        "Smoke of the trace replay (~3 min): both runs reach ~98 Gb/s offered at the",
+        "trace's mean frame (~860 B, ~13.7 Mpps); the .jsonl window shows a",
+        "schedule step about every second and the per-queue offered estimate",
+        "uneven like the trace; the dut's per-queue rx counts are uneven too.",
+    ], cells)
+
+
+def f22():
+    variants = [("trace", ""), ("trace32p", "work=32 payload=1"),
+                ("trace48p", "work=48 payload=1"), ("trace32phog4", "work=32 payload=1 hog=4")]
+    cells = [(name, s, "rates=98 duration=60 %s --trace %s --timeseries %s %s"
+              % (opts, MAWI, WARM, LAT)) for name, opts in variants for s in CORE]
+    write("f22_mawi.txt", [
+        "A real trace's load (rxBisect Fig. 16 with a public trace): the first 60 s",
+        "of MAWI samplepoint-F 2026-10-14 14:00 (WIDE backbone), each second's",
+        "per-queue share of its IPv4 frames (by the dut's RSS) replayed as one",
+        "second of 98% of line rate, frame sizes drawn from the trace's mix",
+        "(~35% <= 128 B, ~35% >= 1400 B, mean ~860 B). Plain l3fwd, a NF of 32 or",
+        "48 reads with payload (near saturation at ~1.7 Mpps per core), and 32",
+        "reads with 4 STREAM workers (rxBisect's co-location). n = 3.",
+    ], rounds("f22", cells, 3))
+
+
 def main():
     for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
-                    s1, s2, f16, f17, f18, s3, f19, s4, f20, f21):
+                    s1, s2, f16, f17, f18, s3, f19, s4, f20, f21, s5, f22):
         battery()
 
 

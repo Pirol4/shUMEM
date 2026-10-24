@@ -1,0 +1,72 @@
+# A real trace's load (rxBisect Fig. 16 with a public trace): the first 60 s
+# of MAWI samplepoint-F 2026-10-14 14:00 (WIDE backbone), each second's
+# per-queue share of its IPv4 frames (by the dut's RSS) replayed as one
+# second of 98% of line rate, frame sizes drawn from the trace's mix
+# (~35% <= 128 B, ~35% >= 1400 B, mean ~860 B). Plain l3fwd, a NF of 32 or
+# 48 reads with payload (near saturation at ~1.7 Mpps per core), and 32
+# reads with 4 STREAM workers (rxBisect's co-location). n = 3.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f22_trace_fill-128_n01                   fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-1024_n01           privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-128_n01            privring-128   -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-1024_n01              privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_fill-128_n01                fill-128       -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_fill-128_n01            fill-128       -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_dyn-128_n01                 dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_shringfix-8_n01         shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_shringfix-8_n01             shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-128_n01               privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_fill-128_n01                fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_dyn-128_n01             dyn-128        -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-1024_n01           privring-1024  -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_privring-128_n01        privring-128   -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_shringfix-8_n01             shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_privring-1024_n01       privring-1024  -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-128_n01            privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_dyn-128_n01                    dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_dyn-128_n01                 dyn-128        -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f22_trace32phog4_fill-128_n02            fill-128       -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_shringfix-8_n02             shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_dyn-128_n02                 dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_shringfix-8_n02         shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-128_n02            privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_dyn-128_n02             dyn-128        -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-128_n02            privring-128   -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-1024_n02           privring-1024  -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_fill-128_n02                   fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_shringfix-8_n02             shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_privring-128_n02        privring-128   -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_fill-128_n02                fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-1024_n02              privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_dyn-128_n02                    dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_privring-1024_n02       privring-1024  -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_fill-128_n02                fill-128       -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-1024_n02           privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_dyn-128_n02                 dyn-128        -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-128_n02               privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f22_trace32phog4_privring-1024_n03       privring-1024  -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_fill-128_n03            fill-128       -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_fill-128_n03                fill-128       -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-1024_n03           privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_dyn-128_n03                    dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_privring-128_n03        privring-128   -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_shringfix-8_n03             shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_privring-128_n03            privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-128_n03            privring-128   -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_dyn-128_n03             dyn-128        -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_privring-1024_n03           privring-1024  -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-128_n03               privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_dyn-128_n03                 dyn-128        -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_dyn-128_n03                 dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32phog4_shringfix-8_n03         shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 hog=4 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_privring-1024_n03              privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace_fill-128_n03                   fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace48p_fill-128_n03                fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f22_trace32p_shringfix-8_n03             shringfix-8    -  -  rates=98 duration=60 work=32 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

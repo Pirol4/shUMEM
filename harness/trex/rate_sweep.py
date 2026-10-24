@@ -91,6 +91,9 @@ def parse_args():
                         help="change the per-queue weights during each measured window: "
                              "skew:<seed>[:<period>[:<lo>-<hi>]], switch:<t>:<w0,...>, "
                              "or a JSON file (harness/trex/schedule.py)")
+    parser.add_argument("--trace", metavar="JSON",
+                        help="replay a trace's load pattern (harness/trace/trace_schedule.py): "
+                             "per-queue weights per step and its frame-size mix")
     parser.add_argument("--lat-queues", default="hot",
                         help="latency streams: hot (one, on the hot queue), all, none, "
                              "or q,q,... (default hot)")
@@ -114,6 +117,9 @@ def parse_args():
     parser.add_argument("--details", help="JSON lines file, appended to "
                                           "(default: --out with .jsonl)")
     args = parser.parse_args()
+    args.size_list = None
+    if args.trace:
+        apply_trace(args)
     if not 0 <= args.hot_queue < QUEUES:
         parser.error("--hot-queue must be 0-%d" % (QUEUES - 1))
     if args.schedule and not args.queue_weights:
@@ -128,12 +134,27 @@ def parse_args():
     return args
 
 
+def apply_trace(args):
+    """--trace: its first step's weights, its mean frame (for rates and Gb/s)
+    on every queue, its size mix drawn per frame, its steps as the schedule."""
+    with open(args.trace) as f:
+        trace = json.load(f)
+    if args.hot_move or args.hot_share:
+        sys.exit("--trace replaces --hot-share and --hot-move")
+    args.queue_weights = ",".join(str(w) for w in trace["steps"][0][1])
+    args.queue_sizes = ",".join([str(int(round(trace["mean_size"])))] * QUEUES)
+    args.size_list = ",".join(str(s) for s in trace["size_list"])
+    args.schedule = args.schedule or args.trace
+
+
 def load_streams(args, hot_queue):
     tunables = dict(pkt_size=args.pkt_size, flows=args.flows, hot_share=args.hot_share,
                     hot_queue=hot_queue, lat_queues=args.lat_queues, lat_pps=args.lat_pps)
     if args.queue_weights:
         tunables.update(queue_weights=args.queue_weights,
                         queue_sizes=",".join(str(s) for s in args.sizes))
+    if args.size_list:
+        tunables.update(size_list=args.size_list)
     return STLProfile.load_py(args.profile, **tunables).get_streams()
 
 

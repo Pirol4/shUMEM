@@ -15,7 +15,8 @@ packets in proportion to `weights`. Specs:
       The weights of --queue-weights until t, then these (shRing's Fig. 13:
       a load that turns pathological mid-run).
   <file.json>
-      [[t, [w0, ..., w7]], ...], t ascending, the first at 0.
+      [[t, [w0, ..., w7]], ...], t ascending, the first at 0; or an object
+      with those under "steps" (harness/trace/trace_schedule.py).
 """
 import json
 import math
@@ -57,7 +58,10 @@ def parse(spec, duration, initial_weights):
                  (float(t), [float(w) for w in weights.split(",")])]
     else:
         with open(spec) as f:
-            steps = [(float(t), [float(w) for w in ws]) for t, ws in json.load(f)]
+            data = json.load(f)
+        # A trace_schedule.py JSON holds its steps under "steps".
+        rows = data["steps"] if isinstance(data, dict) else data
+        steps = [(float(t), [float(w) for w in ws]) for t, ws in rows]
     check(steps, initial_weights)
     return steps
 

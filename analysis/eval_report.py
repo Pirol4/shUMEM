@@ -626,6 +626,12 @@ def figures(table, records, out):
                                    ("dram_write", "DRAM write (MB/s)", True)],
                out, "Overload policy: dyn-128, dyn-128 + fill_overload_ms=50, fill-128")
     timeseries(plt, records, "f18", out, "Overload policy: load turns pathological at 20 s")
+    bar_panels(plt, table, "f22", [("gbps", "delivered Gb/s", False),
+                                   ("loss_pct", "loss (%)", True),
+                                   ("lat_avg", "mean latency (us)", True),
+                                   ("pooled_all_p99.99", "p99.99 (us)", True)],
+               out, "MAWI trace load (real per-queue imbalance and size mix)",
+               groups=["trace", "trace32p", "trace48p", "trace32phog4"])
     bar_panels(plt, table, "f9", [("ndr_pct", "no-drop rate (% of line)", False)], out,
                "No-drop rate, 1500 B (shRing Fig. 3, rxBisect Fig. 9)", groups=["multi", "single"])
     line_panels(plt, table, "f10", [("ndr_mpps", "no-drop rate (Mpps)", False)],

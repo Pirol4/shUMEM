@@ -117,6 +117,10 @@ grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "
 # HDR latency needs the hdrh module where rate_sweep.py runs.
 "${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \
     || die "python3 on $TGEN_HOST lacks hdrh: run 'sudo pip3 install hdrhistogram' there"
+# A trace replay reads its JSON on the tgen (harness/trace/fetch_mawi.sh there).
+for trace in $(grep -vE '^[[:space:]]*(#|$)' "$PLAN" | grep -oE -- '--trace [^ ]+' | awk '{print $2}' | sort -u); do
+    "${SSH[@]}" "test -r $trace" || die "$trace is missing on $TGEN_HOST: run harness/trace/fetch_mawi.sh there first"
+done
 if grep -vE '^[[:space:]]*(#|$)' "$PLAN" | grep -q ' hog='; then
     command -v stress-ng >/dev/null || die "the plan uses hog= but stress-ng is missing: sudo apt-get install -y stress-ng"
 fi
