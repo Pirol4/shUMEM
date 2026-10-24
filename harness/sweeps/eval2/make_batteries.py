@@ -419,9 +419,78 @@ def f18():
     ], policy_rounds("f18", tests, 3))
 
 
+# --- Round 3 (CLAUDE.md 20.13): the rate floor and overload on by default ----------
+
+# dyn-128 now runs fill_overload_ms=20 and fill_runway_ns=7000 by default (fork
+# b96c6a87a); dynold-128 is dyn-128 with both off, i.e. the dyn of rounds 1-2.
+OLD = "overload=0 runway=0"
+
+
+def s3():
+    cells = [
+        line("s3_r100_dyn-128", "dyn-128", "rates=100 duration=10 --pkt-size 60 %s %s"
+             % (WARM, LAT_NDR)),
+        line("s3_bal_dyn-128", "dyn-128", "rates=98 duration=10 %s %s" % (WARM, LAT)),
+        line("s3_pv2400_dyn-128", "dyn-128", "rates=98 duration=20 work=2 target=4:2400 "
+             "--queue-weights %s %s %s" % (weights(0.0722), WARM, LAT)),
+    ]
+    write("s3_smoke.txt", [
+        "Smoke of fork b96c6a87a with its defaults (~4 min): the 64 B run's FILL",
+        "credits lines show a rate floor near 128 and its summary no ethtool",
+        "rx_prio0_buf_discard; the balanced run a rate floor of 32 (the fixed",
+        "floor) and DRAM write in the tens of MB/s; the slow target overloads > 0.",
+    ], cells)
+
+
+def f19():
+    systems = [("dyn-128", "dyn-128", ""), ("dynold-128", "dyn-128", OLD)]
+    cells = []
+    # 64 B: the rate floor against the static budgets and rings it should match.
+    for name, system, extra in systems + [("fill-128", "fill-128", ""),
+                                          ("fill-64", "fill-64", ""),
+                                          ("fill-64-64", "fill-64-64", ""),
+                                          ("privring-64", "privring-64", "")]:
+        cells.append(("ndr64", name, system, "duration=10 --pkt-size 60 --search 30,100 %s %s %s"
+                      % (WARM, LAT_NDR, extra)))
+        cells.append(("r100", name, system, "rates=100 duration=10 --pkt-size 60 %s %s %s"
+                      % (WARM, LAT_NDR, extra)))
+    for name, system, extra in systems:
+        cells.append(("ndr128", name, system, "duration=10 --pkt-size 124 --search 30,100 %s %s %s"
+                      % (WARM, LAT_NDR, extra)))
+    # 1500 B: nothing may change, the working set least of all.
+    for name, system, extra in systems + [("shringfix-8", "shringfix-8", ""),
+                                          ("fill-128", "fill-128", "")]:
+        cells.append(("bal", name, system, "rates=98 duration=60 %s %s %s" % (WARM, LAT, extra)))
+    tests = [("cold", "stall=4:1000:100"), ("len500", "stall=4:500:100"),
+             ("len2000", "stall=4:2000:100"), ("hot", "stall=1:1000:100 --hot-share 0.5"),
+             ("twob", "stall=4:1000:100 --hot-share 0.5"), ("hotq", "--hot-share 0.5"),
+             ("pv2400", "work=2 target=4:2400 --queue-weights %s" % weights(0.0722)),
+             ("mi128", "work=128 payload=0"), ("mi128p", "work=128 payload=1")]
+    for test, opts in tests:
+        for name, system, extra in systems:
+            cells.append((test, name, system, "rates=98 duration=30 %s %s %s %s"
+                          % (opts, WARM, LAT, extra)))
+    body = []
+    for k in range(1, 4):
+        order = list(cells)
+        random.Random("f19-%d" % k).shuffle(order)
+        body.append("# round %d" % k)
+        body += [line("f19_%s_%s_n%02d" % (cell, name, k), system, opts.strip())
+                 for cell, name, system, opts in order]
+    write("f19_confirm.txt", [
+        "The rate floor (fill_runway_ns=7000) and overload (fill_overload_ms=20),",
+        "both default since fork b96c6a87a, as dyn-128, against dynold-128 (both",
+        "off: rounds 1-2), n = 3. 64 B and 128 B: no-drop rate and a 100% window",
+        "with the NIC's drop counters, beside fill-128, fill-64 in a ring of 1024",
+        "and of 64, privring-64 (is the NIC's need a time or a ring?). 1500 B:",
+        "balanced (+ shringfix-8, fill-128), stalls, hot queue, slow target and",
+        "the heavy NF must not change, the working set least of all.",
+    ], body)
+
+
 def main():
     for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
-                    s1, s2, f16, f17, f18):
+                    s1, s2, f16, f17, f18, s3, f19):
         battery()
 
 

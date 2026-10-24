@@ -44,16 +44,18 @@ SPECIAL_QUEUE = {
     "f5": 3, "f6": 3, "f7": 3, "f13": 3,
     "f15": {"hot": 0},
     "f18": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
+    "f19": {"pv": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
 }
 SYSTEM_ORDER = ["privring-1024", "privring-512", "privring-256", "privring-128", "privring-64",
                 "shring-8", "shringfix-8", "fill-32", "fill-64", "fill-96", "fill-128",
                 "dyn-32-8", "dyn-64-16", "dyn-128", "dyn-128-64", "dyn-128-96", "dyn-128-128",
-                "dynov-128"]
+                "dynov-128", "dynold-128", "fill-64-64"]
 STYLE = {   # as analysis/sweep_report.py, so a system keeps its color
     "privring-1024": ("#2a78d6", "o"), "privring-128": ("#eb6834", "s"),
     "shring-8": ("#1baf7a", "D"), "fill-128": ("#eda100", "^"),
     "dyn-128": ("#e87ba4", "o"), "shringfix-8": ("#7a5bd6", "d"),
     "dynov-128": ("#1f1f1e", "P"),
+    "dynold-128": ("#b0b0a8", "o"),
 }
 INK, INK_MUTED, GRID = "#1f1f1e", "#6b6a63", "#e4e3dc"
 

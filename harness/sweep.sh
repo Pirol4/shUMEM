@@ -33,7 +33,10 @@
 #   hog=<n>                  n stress-ng STREAM workers on CPUs 9-15 during the
 #                            run (memory-bandwidth co-location, rxBisect Fig. 17)
 #   overload=<ms>            dyn-* queues that do not drain for <ms> keep their
-#                            floor (fill_overload_ms, fork 7cbfa5102)
+#                            floor (fill_overload_ms; default 20 since fork
+#                            b96c6a87a, 0 = off)
+#   runway=<ns>              dyn-* floor = that much of the queue's traffic
+#                            (fill_runway_ns; default 7000, 0 = off)
 # Every run also keeps the kernel's `ethtool -S` counters of the experiment
 # NIC before and after the traffic and puts their non-zero drop/discard
 # deltas in the summary: the NIC's own view of where packets were lost.
@@ -105,10 +108,10 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
 
 # The build must have the knobs the sweep files use.
 # fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5;
-# fork 290de897f: synthetic work and occupancy in l3fwd; 7cbfa5102: overload.
+# fork 290de897f: synthetic work and occupancy in l3fwd; b96c6a87a: runway.
 grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "$L3FWD_BIN" \
-    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "fill_overload_ms" "$L3FWD_BIN" \
-    || die "$L3FWD_BIN is missing or older than fork 7cbfa5102:
+    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "fill_runway_ns" "$L3FWD_BIN" \
+    || die "$L3FWD_BIN is missing or older than fork b96c6a87a:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
 # HDR latency needs the hdrh module where rate_sweep.py runs.
 "${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \
@@ -333,7 +336,7 @@ run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
     local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory ops="" groups="" reserve="" arg
-    local work="" target="" payload="" mib="" hog="" overload=""
+    local work="" target="" payload="" mib="" hog="" overload="" runway=""
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
@@ -362,6 +365,8 @@ run_one() {
                         [[ "$hog" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want hog=<n>" ;;
             overload=*) overload="${arg#overload=}"
                         [[ "$overload" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want overload=<ms>" ;;
+            runway=*)   runway="${arg#runway=}"
+                        [[ "$runway" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want runway=<ns>" ;;
             *)          extra+=("$arg") ;;
         esac
     done
@@ -380,6 +385,7 @@ run_one() {
     [[ -z "$payload" ]] || env_args+=("L3FWD_WORK_PAYLOAD=$payload")
     [[ -z "$mib" ]] || env_args+=("L3FWD_WORK_MIB=$mib")
     [[ -z "$overload" ]] || env_args+=("FILL_OVERLOAD_MS=$overload")
+    [[ -z "$runway" ]] || env_args+=("FILL_RUNWAY_NS=$runway")
     env_args+=("L3FWD_OCCUPANCY_US=$OCCUPANCY_US")
 
     log "$label: starting $system ${env_args[*]:-}"
@@ -439,7 +445,7 @@ run_one() {
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} overload=${overload:-0} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} overload=${overload:--} runway=${runway:--} extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }

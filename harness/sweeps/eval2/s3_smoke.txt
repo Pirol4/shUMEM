@@ -1,0 +1,9 @@
+# Smoke of fork b96c6a87a with its defaults (~4 min): the 64 B run's FILL
+# credits lines show a rate floor near 128 and its summary no ethtool
+# rx_prio0_buf_discard; the balanced run a rate floor of 32 (the fixed
+# floor) and DRAM write in the tens of MB/s; the slow target overloads > 0.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+s3_r100_dyn-128                          dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+s3_bal_dyn-128                           dyn-128        -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s3_pv2400_dyn-128                        dyn-128        -  -  rates=98 duration=20 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

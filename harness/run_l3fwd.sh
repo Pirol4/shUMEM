@@ -34,7 +34,9 @@
 # L3FWD_OCCUPANCY_US.
 # FILL_OVERLOAD_MS=<ms> (fork 7cbfa5102) makes a dyn-* queue that has not
 # drained for that long keep its floor and borrow nothing (fill_overload_ms;
-# 0 or unset: off).
+# default 20 since fork b96c6a87a, 0: off). FILL_RUNWAY_NS=<ns> (fork
+# b96c6a87a, fill_runway_ns, default 7000, 0: off) raises a queue's floor to
+# that much of its own traffic, for 64 B frames at line rate (CLAUDE.md 20.12).
 #
 # shringfix-8 is shring-8 with rmp_fix=1: its head advance serialised, which
 # removes the race that can stop the shared ring for good (19.25).
@@ -129,10 +131,12 @@ select_system() {
             [[ -z "${FILL_GROUPS:-}" || "$FILL_GROUPS" =~ ^[1-8]$ ]] || usage
             [[ -z "${FILL_RESERVE:-}" || "$FILL_RESERVE" =~ ^[0-9]+$ ]] || usage
             [[ -z "${FILL_OVERLOAD_MS:-}" || "$FILL_OVERLOAD_MS" =~ ^[0-9]+$ ]] || usage
+            [[ -z "${FILL_RUNWAY_NS:-}" || "$FILL_RUNWAY_NS" =~ ^[0-9]+$ ]] || usage
             DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor}"
             DEVARGS+="${FILL_WINDOW_MS:+,fill_window_ms=$FILL_WINDOW_MS}${FILL_HEADROOM:+,fill_headroom=$FILL_HEADROOM}"
             DEVARGS+="${FILL_GROUPS:+,fill_groups=$FILL_GROUPS}${FILL_RESERVE:+,fill_reserve=$FILL_RESERVE}"
             DEVARGS+="${FILL_OVERLOAD_MS:+,fill_overload_ms=$FILL_OVERLOAD_MS}"
+            DEVARGS+="${FILL_RUNWAY_NS:+,fill_runway_ns=$FILL_RUNWAY_NS}"
             DEVARGS+=",$COMMON_DEVARGS"
             NB_RXD=$FILL_RING_SIZE
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;
