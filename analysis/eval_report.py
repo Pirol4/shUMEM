@@ -159,21 +159,26 @@ def parse_summary_line(run, line):
 
 
 def read_ddio(root):
-    """label -> share of the NIC's full-line writes that hit the LLC, loaded seconds."""
+    """label -> share of the NIC's full-line writes that hit the LLC, loaded seconds.
+
+    pcm-pcie -e writes one block per second: a header, then Total, Miss and Hit
+    rows. A second counts when its Total ItoM shows the NIC writing (>= 1e8/s);
+    its Hit row is then taken whatever its size (privring-1024 hits ~20%).
+    """
     ddio = {}
     for path in find(root, "pcm-pcie_*.csv"):
         label = os.path.basename(path)[len("pcm-pcie_"):-len(".csv")]
-        total = hit = 0
-        rows = list(csv.reader(open(path)))
-        for row in rows:
+        total = hit = 0.0
+        loaded = False
+        for row in csv.reader(open(path)):
             if len(row) < 3 or row[0] == "Skt":
                 continue
-            itom = number(row[2])
-            if itom is None or itom < 1e8:     # idle seconds: the NIC writes little
-                continue
+            itom = number(row[2]) or 0.0
             if row[-1].endswith("(Total)"):
-                total += itom
-            elif row[-1].endswith("(Hit)"):
+                loaded = itom >= 1e8
+                if loaded:
+                    total += itom
+            elif row[-1].endswith("(Hit)") and loaded:
                 hit += itom
         if total:
             ddio[label] = 100.0 * hit / total

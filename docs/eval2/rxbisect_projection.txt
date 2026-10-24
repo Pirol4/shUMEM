@@ -1,0 +1,39 @@
+rxBisect's published numbers, and what they project onto our testbed (CLAUDE.md 20.8).
+
+== Fig. 10 (balanced, full load) against f1: each system / shRing
+   memory bandwidth, LB: paper rxBisect/shRing 1.92 (small privRing 0.92)
+   memory bandwidth, NAT: paper rxBisect/shRing 1.73 (small privRing 0.93)
+   DRAM write here: dyn-128/shRing 0.61 (privring-128 17.60) — paper's rxBisect is emulated, so its ratio overstates hardware rxBisect
+   occupancy, LB: paper rxBisect 8% shRing 3%; DDIO hit rxBisect 67% shRing 82%
+   occupancy, NAT: paper rxBisect 10% shRing 3%; DDIO hit rxBisect 66% shRing 80%
+   DDIO hit: paper rxBisect/shRing 0.82 (LB) 0.82 (NAT), emulated; here dyn-128 99.6% / shRing 99.0% = 1.006
+   cycles per packet: paper (Fig. 18, low load) rxBisect ~0.90 x shRing; here dyn-128 0.41 x shRing (f1, full load, fwd cycles)
+
+== Fig. 9 (l3fwd no-drop, 1500 B) against f9, %% of line rate
+   multi  paper: rxBisect 97, small 98, shRing 97, privRing 97 | here: dyn 100.0, small 100.0, shRing 100.0, privRing 100.0
+   single paper: rxBisect 82, small 40, shRing 80, privRing 80 | here: dyn 99.7, small 100.0, shRing 100.0, privRing 100.0
+   single core: small privRing 40% there and ~100% here — another regime (isolated cores never pause here), so no anchor transfers; compare with stalls (f4/f5)
+
+== Fig. 14 (processing variability) against f6, throughput / its value at x = 0
+   x mapped by the knee: paper 112 accesses, ours 1700 (f6: shRing intact at 1600, down at 2400)
+  ours x x/knee |     dyn   small  shRing |  pap rxB  pap shR | rxB est (small)   rxB est (shR)
+       0   0.00 |   1.000   1.000   1.000 |    1.000    1.000 |           1.000           1.000
+     800   0.47 |   1.000   1.000   1.000 |    1.000    1.000 |           1.000           1.000
+    1600   0.94 |   1.000   1.000   0.999 |    1.000    0.986 |           1.000 1.014 (>1, invalid)
+    2400   1.41 |   0.996   0.996   0.666 |    1.000    0.755 |           0.996           0.883
+    3200   1.88 |   0.994   0.994   0.503 |    1.000    0.578 |           0.994           0.869
+    4800   2.82 |   0.993   0.993   0.336 |    1.000    0.415 |           0.993           0.810
+    6400   3.76 |   0.992   0.992   0.253 |    1.000    0.415 |           0.992 0.609 (off-regime)
+   (the paper's axis ends at 300 = 2.7 knees; beyond it the paper's last point is used)
+
+== Fig. 15 (traffic variability) against f7, throughput / its value at 1%
+ share |     dyn   small  shRing |  pap rxB  pap shR | rxB est (small)   rxB est (shR)
+  0.05 |   1.000   1.000   1.000 |    1.000    1.000 |           1.000           1.000
+   0.1 |   1.000   1.000   1.000 |    0.995    0.995 |           1.000           1.000
+  0.15 |   1.000   1.000   1.000 |    0.985    0.995 |           0.990           0.990
+   0.2 |   1.000   1.000   1.000 |    0.972    0.857 |           0.984 1.134 (>1, invalid)
+  0.25 |   1.000   1.000   1.000 |    0.960    0.677 |           0.980 1.419 (>1, invalid)
+   0.3 |   1.000   1.000   1.000 |    0.946    0.544 |           0.963 1.740 (>1, invalid)
+   0.4 |   0.998   0.998   0.998 |    0.943    0.513 |           0.956 1.836 (>1, invalid)
+   0.5 |   0.987   0.988   0.987 |    0.943    0.513 |           0.946 1.815 (>1, invalid)
+   (paper's rxBisect drop past 20% is its emulator core, by its own text; past 31.5% the paper's last point is used)

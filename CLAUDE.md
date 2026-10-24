@@ -1774,3 +1774,58 @@ First projection (f1, f6, f7, f9 of 20.7):
 - **Fig. 15 / f7:** through small privRing, rxBisect 0.946–0.963 from 30% on; dyn-128 0.987–1.000 — but the paper attributes rxBisect's drop to its emulator core, so hardware rxBisect would sit near small privRing (~1.0): **parity, not a win.** The shRing anchor is off-regime (shRing does not collapse here).
 - **Fig. 10 / f1, memory:** paper rxBisect / shRing memory bandwidth 1.73–1.92 (emulated); here dyn-128 / shRing DRAM write 0.61. **Cycles:** paper rxBisect ≈ 0.90 × shRing (Fig. 18, low load); here dyn-128 0.41 × shRing (fwd cycles, full load). Favourable, but different metrics and emulation inflate rxBisect's side: supporting evidence only.
 - **Fig. 9 / f9:** another regime (single-core small privRing 40% there, ~100% here); nothing transfers.
+
+### 20.9 The whole evaluation: final analysis (all 16 batteries, 1,688 runs, finished 2026-10-23)
+
+Data: `C:\Users\filip\shumem_eval2` (`dut_exp`, `tgen_exp`, `dut_results`). Tables, figures and `cells.csv` in **`docs/eval2/`** (`tables.txt`, `rxbisect_projection.txt`); regenerate with `python3 analysis/eval_report.py /mnt/c/Users/filip/shumem_eval2 --out docs/eval2`. Integrity: every battery complete (f0 14/14 … f15 30/30), no run retried, no warning; HDR latency in every window (the one exception is a published shring-8 run that wedged at 100% loss: no packet, no sample); `stall_core` made 439 stalls of the requested length in all 355 stall runs. Two report bugs fixed on the way: delivered Gb/s with mixed frame sizes (f7, 20.7) and the DDIO reader dropping privring-1024's Hit rows (it hits ~20%, below the loaded-second threshold).
+
+Systems: privring-1024 (default), privring-128 (small privRing), shRing = shringfix-8 (published shring-8 only in f4), fill-128 (static budget), **dyn-128 (ours)**. 98% of line rate, 1500 B, trimmed means.
+
+**1. Cost of the working set under balanced load (f1, f2, f8, f12, f15) — our clearest win.**
+
+| | privring-1024 | privring-128 | fill-128 | shRing | **dyn-128** |
+|---|---|---|---|---|---|
+| DRAM write, f1 (MB/s) | 9,972 | 907 | 519 | 52 | **32** |
+| DDIO hit, f2 (%) | 19.5 | 91.9 | 95.4 | 99.0 | **99.6** |
+| Rx cycles/pkt, f1 | 417 | 313 | 305 | 911 | **300** |
+| fwd cycles/pkt with 16 reads/pkt, f8 | 1,024 | 913 | — | 1,532 | **878** |
+| DRAM write with 2 / 16 reads/pkt, f8 (MB/s) | 11,163 / 11,669 | 1,538 / 2,176 | 997 / 1,675 | 769 / 1,656 | **437 / 800** |
+| posted buffers (mean) | 8,192 | 1,024 | 1,024 | 1,024 | **256** |
+
+Loss 0 and latency a tie everywhere here (p99 49–51 µs, pooled p99.99 56–58 µs). With work the NF's own reads evict packet buffers, and dyn keeps about half of shRing's DRAM write at every work level. **Cycles per packet are the throughput we would get at saturation**: at 16 reads, 2,400 MHz / cycles = 2.73 Mpps per core for dyn, 2.34 (privring-1024, −14%), 1.57 (shRing, −43%). Gb/s does not show it because l3fwd at ~1 Mpps per core has headroom (f8/f11 all 98 Gb/s, loss 0, even with 7 STREAM workers writing ~36 GB/s). A heavier NF (f17) is what turns this into a throughput result like the papers' +12–37%. Payload reads remove most DRAM write for every system (privring-1024 10.3 → 0.24 GB/s at 0 reads): the leak is lines the NIC wrote and nobody touched.
+
+**2. Isolation under core stalls (f4, f5) — our second clear win.**
+
+| loss % | privring-1024 | privring-128 / fill-128 | shRing | **dyn-128** |
+|---|---|---|---|---|
+| cold 1 ms (f4) | 0.0004 | 0.109 | 0.883 (bystanders 0.88) | **0.026** |
+| hot core 1 ms (f4) | 0.440 | 0.545 | 0.888 | **0.463** |
+| two borrowers (f4) | 0 | 0.047 | 0.882 | **0 (10/10 runs)** |
+| stall 100 / 250 / 500 / 750 µs (f5) | 0 / 0 / 0 / 0 | 0 / 0.016 / 0.047 / 0.078 | 0 / 0.13 / 0.38 / 0.63 | **0 / 0 / 0 / 0** |
+| stall 1 / 1.5 / 2 ms (f5) | 0.0004 / 0.061 / 0.124 | 0.110 / 0.172 / 0.234 | 0.88 / 1.38 / 1.88 | **0.026 / 0.088 / 0.151** |
+
+- dyn-128 loses **nothing up to 750 µs stalls** with 256 posted buffers in steady state; privring-1024 does the same with 8,192. Above ~750 µs dyn loses what exceeds the ~830 buffers a queue can hold, ~1.2× privring-1024's loss at 1.5–2 ms, ~⅔ of the static budget's, 6–12× under shRing.
+- Our bystanders lose 0 in every stall test; shRing's lose 0.13–1.88%. n = 10 (f4), 5 (f5); spread ≤ 0.1%.
+- **Published shring-8 collapsed (47–100% lost) in 5/10 cold and 2/10 hot-core runs; shringfix-8 in 0/30.**
+- Latency: the stalled queue's p99.99 ≈ the stall length for every system (packets wait out the stall). Bystanders' p99.99: equal, except two borrowers (dyn 123, privring-1024 125 against 95–99 µs: the stalled queue's backlog leaves as one Tx burst).
+
+**3. A slow or overloaded core (f6, f13) — win on isolation, loss on the overloaded queue's latency.**
+
+- shRing collapses: f6 98 → 65 / 49 / 33 / 25 Gb/s at 2,400–6,400 reads per packet on the target, bystanders losing 29–75%; f13 (target goes from ~1 Gb/s to its full share at 20 s, 800 reads) 58 Gb/s, 41% lost, delivered/offered falling from 100% to 18% in one second (time series). All others keep 97.2–97.7 Gb/s (f6) and lose only the target's excess (f13: 5.1–5.2% for all, bystanders at 0 and p99.99 50 µs).
+- **dyn-128's weakness:** an overloaded queue borrows up to ~800 buffers (its occupancy ~800 in f6, ~310 in f13), which do not cut its loss (same as the static systems) but hold its packets: target p99 13–35 ms (f6) and 4.6 ms (f13), against 2.6–6.7 ms and 0.87 ms for privring-128/fill-128, and 18–49 ms / 6.2 ms for privring-1024.
+
+**4. No separation (kept as evidence, explained):**
+- f3 load 10–100%: a tie at every load (dyn's p99.99 71 against 56–57 µs at exactly 100%).
+- f7 traffic variability (64 B to the target): no collapse for anyone, shRing included; loss from 30% of the packets, ~1.2% of bandwidth at 50%, bystanders 0. Differs from both papers; open.
+- f9 NDR 1500 B: ~100% for every system and ring size, one core or eight (fill/dyn single core 99.65%): isolated cores do not pause, so ring depth only matters with stalls (f4/f5).
+- f11 co-location and f12 time-varying skew (with and without STREAM): every system 98–99 Gb/s, loss 0, p99 76 µs under skew for all; DRAM write follows f1's order.
+- f15 hot queue fixed or moving: loss 0 for all; DRAM write dyn 18–29 vs shRing 68–97 MB/s.
+- f14 mempool: confirms 19.27 with n = 3 — without a per-lcore cache shRing collapses (50% lost) while dyn loses 0 (525 cycles with 4 ring pools, 430 with 4 stack pools, DRAM 28 MB/s); cache 32 + stack: dyn 2 MB/s.
+
+**5. 64 B: dyn-128's other weakness (f10).** NDR (Mpps): privring-1024 / privring-128 / fill-128 forward line rate at every size (148.8 Mpps at 64 B); **dyn-128 88.4 Mpps (59%) at 64 B**, line rate from 128 B on; shRing caps at 19.5–21.8 Mpps at every size (15% at 64 B). dyn's 64 B drops are uncounted NIC drops (20.7), not CPU (171 cycles/pkt) nor ring starvation; hypothesis: too few WQEs posted ahead in time (budgets ~75 ≈ 4 µs at 18.6 Mpps per queue).
+
+**6. Against rxBisect (projection, 20.8, `docs/eval2/rxbisect_projection.txt`):** parity on its central figures (Fig. 14: estimated rxBisect 0.992–0.996, dyn 0.992–0.996 of unloaded throughput; Fig. 15: estimated 0.946–0.963 because of its emulator, dyn 0.987–1.000, hardware rxBisect likely ~1.0). Favourable but caveated on cost: memory bandwidth vs shRing 0.61× (paper's emulated rxBisect 1.73–1.92×), DDIO hit 1.006× shRing (rxBisect 0.82×, emulated), cycles 0.41× shRing (rxBisect ~0.90×, low load).
+
+**What the evaluation says the paper can claim:** (1) the I/O working set of shRing or better (lowest DRAM write, highest DDIO hit, 4× fewer posted buffers than the static 128) at privRing's per-packet cost (⅓ of shRing's cycles); (2) isolation: a stalled or slow core costs only its own queue, with no loss up to 750 µs stalls, where shRing collapses or loses on every queue; (3) rxBisect's variability results reproduced on an unmodified NIC (by projection). **What must be fixed or framed:** latency of a persistently overloaded queue (credits should not feed sustained overload), and 64 B packet rates above ~88 Mpps.
+
+**Decision pending with the user** (after this analysis, nothing started): (a) overload policy — stop lending beyond the entitlement to a queue whose backlog never drains — then rerun f6/f13; (b) f16 64 B diagnosis (`ethtool -S` deltas; privring-64, fill-64/96, dyn floors 64/96/128); (c) f17 heavier NF (32–128 reads, payload, STREAM) to turn the cycles advantage into throughput; (d) e-mail to Pismenny for the rxBisect code. Nodes still up (reserved to 2026-10-29).

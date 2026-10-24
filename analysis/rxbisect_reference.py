@@ -223,6 +223,14 @@ def balanced(cells):
         print("   occupancy, %s: paper rxBisect %d%% shRing %d%%; DDIO hit rxBisect %d%% shRing %d%%"
               % (nf, fig["occupancy"]["rxbisect"], fig["occupancy"]["shring"],
                  fig["ddio"]["rxbisect"], fig["ddio"]["shring"]))
+    dyn_ddio = value(cells, "f2", "ddio", OURS["rxbisect_counterpart"], "ddio_hit_pct")
+    shr_ddio = value(cells, "f2", "ddio", OURS["shring"], "ddio_hit_pct")
+    if dyn_ddio and shr_ddio:
+        print("   DDIO hit: paper rxBisect/shRing %.2f (LB) %.2f (NAT), emulated; here dyn-128 "
+              "%.1f%% / shRing %.1f%% = %.3f" % (
+                  FIG10["LB"]["ddio"]["rxbisect"] / FIG10["LB"]["ddio"]["shring"],
+                  FIG10["NAT"]["ddio"]["rxbisect"] / FIG10["NAT"]["ddio"]["shring"],
+                  dyn_ddio, shr_ddio, dyn_ddio / shr_ddio))
     dyn_cyc = value(cells, "f1", "bal", OURS["rxbisect_counterpart"], "fwd_cyc")
     shr_cyc = value(cells, "f1", "bal", OURS["shring"], "fwd_cyc")
     if dyn_cyc and shr_cyc:
@@ -255,7 +263,7 @@ def fmt_est(est):
     if est is None:
         return "-"
     v, ok = est
-    if v > 1.0 + 1e-9:
+    if v > 1.0 + 1e-3:
         return "%.3f (>1, invalid)" % v
     return "%.3f%s" % (v, "" if ok else " (off-regime)")
 
