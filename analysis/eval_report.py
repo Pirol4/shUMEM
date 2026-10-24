@@ -585,8 +585,7 @@ def figures(table, records, out):
                 "offered load (% of line rate)", out, "Latency against load")
     line_panels(plt, table, "f21", [("lat_avg", "mean latency (us)", True),
                                     ("lat_p99", "p99 (us)", True),
-                                    ("loss_pct", "loss (%)", True),
-                                    ("occ_mean", "ring occupancy (pkts)", True)],
+                                    ("loss_pct", "loss (%)", True)],
                 "offered load (% of line rate)", out,
                 "Latency against load, heavy NF (96 reads, payload read)")
     bar_panels(plt, table, "f4", [("loss_pct", "loss (%)", True),
