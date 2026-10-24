@@ -292,8 +292,119 @@ def f15():
     ], rounds("f15", cells, 3))
 
 
+# --- Round 2 (CLAUDE.md 20.11): 64 B, a heavier NF, the overload policy -----------
+
+# dyn-128 with fill_overload_ms=50: a queue that has not drained for 50 ms keeps
+# its floor. The label names it dynov-128; the system run is dyn-128.
+OVERLOAD = "overload=50"
+POLICY = [("dyn-128", "dyn-128", ""), ("dynov-128", "dyn-128", OVERLOAD),
+          ("fill-128", "fill-128", "")]
+
+
+def policy_rounds(battery, tests, n):
+    """tests: [(cell, options)] run for every system of POLICY."""
+    out = []
+    for k in range(1, n + 1):
+        order = [(cell, name, system, ("%s %s" % (opts, extra)).strip())
+                 for cell, opts in tests for name, system, extra in POLICY]
+        random.Random("%s-%d" % (battery, k)).shuffle(order)
+        out.append("# round %d" % k)
+        out += [line("%s_%s_%s_n%02d" % (battery, cell, name, k), system, options)
+                for cell, name, system, options in order]
+    return out
+
+
+def s1():
+    tv = weights(0.0722)
+    cells = [
+        line("s1_pv2400_dynov-128", "dyn-128", "rates=98 duration=20 work=2 target=4:2400 "
+             "--queue-weights %s %s %s %s" % (tv, OVERLOAD, WARM, LAT)),
+        line("s1_cold_dynov-128", "dyn-128", "rates=98 duration=20 stall=4:1000:100 %s %s %s"
+             % (OVERLOAD, WARM, LAT)),
+        line("s1_r100_dyn-128", "dyn-128", "rates=100 duration=10 --pkt-size 60 %s" % LAT_NDR),
+        line("s1_mi64_privring-1024", "privring-1024", "rates=98 duration=10 work=64 %s" % LAT),
+    ]
+    write("s1_smoke.txt", [
+        "Smoke test of round 2 (~6 min), before leaving it overnight: the pv2400",
+        "run's FILL credits line for queue 3 counts overloads > 0 and its budget",
+        "now is 32; the cold stall has 0 overloads and loses like f4 (~63 k);",
+        "the 64 B run prints an `ethtool:` line; the mi64 run has WORK lines.",
+    ], cells)
+
+
+def f16():
+    systems = ["privring-64", "privring-128", "fill-32", "fill-64", "fill-96", "fill-128",
+               "dyn-128", "dyn-128-64", "dyn-128-96", "dyn-128-128"]
+    cells = []
+    for s in systems:
+        cells.append(("ndr", s, "duration=10 --pkt-size 60 --search 30,100 %s %s"
+                      % (WARM, LAT_NDR)))
+        cells.append(("r100", s, "rates=100 duration=10 --pkt-size 60 %s %s" % (WARM, LAT_NDR)))
+    cells.append(("ndr", "dynov-128", "duration=10 --pkt-size 60 --search 30,100 %s %s %s"
+                  % (OVERLOAD, WARM, LAT_NDR)))
+    cells.append(("r100", "dynov-128", "rates=100 duration=10 --pkt-size 60 %s %s %s"
+                  % (OVERLOAD, WARM, LAT_NDR)))
+    body = []
+    for k in range(1, 4):
+        order = list(cells)
+        random.Random("f16-%d" % k).shuffle(order)
+        body.append("# round %d" % k)
+        for name, s, opts in order:
+            system = "dyn-128" if s == "dynov-128" else s
+            body.append(line("f16_%s_%s_n%02d" % (name, s, k), system, opts))
+    write("f16_ndr64.txt", [
+        "Why dyn-128 stops at ~88 Mpps with 64 B frames (20.7, 20.9): no-drop rate",
+        "and a fixed 100% window for static budgets of 32-128 posted buffers,",
+        "privRing rings of 64/128, and dyn-128 with floors 32-128, n = 3, with the",
+        "NIC's own drop counters (`ethtool -S` deltas in the summary). If the",
+        "NIC needs a minimum of buffers posted per queue at this packet rate,",
+        "fill-32/64 fail like dyn-128 and a floor of ~96-128 fixes dyn.",
+    ], body)
+
+
+def f17():
+    cells = []
+    for payload in (0, 1):
+        for work in (32, 48, 64, 80, 96, 128):
+            name = "mi%d%s" % (work, "p" if payload else "")
+            cells += [(name, s, "rates=98 duration=30 work=%d payload=%d %s %s"
+                       % (work, payload, WARM, LAT)) for s in CORE]
+    write("f17_heavy.txt", [
+        "A heavier NF (shRing Fig. 8): 32-128 random reads per packet in 40 MiB on",
+        "every lcore, payload untouched or read, balanced 98%. f8 stopped at 16",
+        "reads, where every core still had headroom; here the cores saturate",
+        "(~2,400 cycles per packet at ~1 Mpps each), so f8's cycles-per-packet",
+        "differences (dyn 878, privring-1024 1,024, shRing 1,532 at 16 reads)",
+        "should become delivered throughput. n = 3.",
+    ], rounds("f17", cells, 3))
+
+
+def f18():
+    tv = weights(0.0722)
+    tests = [("pv%d" % a, "rates=98 duration=30 work=2 target=%d:%d --queue-weights %s %s %s"
+              % (TARGET_LCORE, a, tv, WARM, LAT)) for a in (800, 1600, 2400, 3200, 6400)]
+    tests.append(("switch", "rates=98 duration=40 work=2 target=%d:800 --queue-weights %s "
+                  "--schedule switch:20:%s --timeseries %s %s"
+                  % (TARGET_LCORE, tv, weights(1), WARM, LAT)))
+    tests += [("cold", "rates=98 duration=30 stall=4:1000:100 %s %s" % (WARM, LAT)),
+              ("hot", "rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 %s %s" % (WARM, LAT)),
+              ("twob", "rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 %s %s" % (WARM, LAT))]
+    tests += [("len%d" % us, "rates=98 duration=30 stall=4:%d:100 %s %s" % (us, WARM, LAT))
+              for us in (500, 2000)]
+    tests += [("bal", "rates=98 duration=60 %s %s" % (WARM, LAT)),
+              ("hotq", "rates=98 duration=30 --hot-share 0.5 %s %s" % (WARM, LAT))]
+    write("f18_overload.txt", [
+        "The overload policy (fill_overload_ms=50, fork 7cbfa5102): dyn-128 as",
+        "before, dyn-128 with it (dynov-128), and fill-128, n = 3, on the slow",
+        "target of f6 and f13 (where dyn's queue held ~800 packets: p99 13-35 ms),",
+        "the stalls of f4/f5 (which it must leave alone: a stalled core drains",
+        "within milliseconds), and balanced / hot-queue load (no change expected).",
+    ], policy_rounds("f18", tests, 3))
+
+
 def main():
-    for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15):
+    for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
+                    s1, f16, f17, f18):
         battery()
 
 

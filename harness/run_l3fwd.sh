@@ -32,6 +32,9 @@
 # and the synthetic NF and ring occupancy of fork 290de897f (l3fwd_work.h):
 # L3FWD_WORK_ACCESSES, L3FWD_WORK_TARGET, L3FWD_WORK_PAYLOAD, L3FWD_WORK_MIB,
 # L3FWD_OCCUPANCY_US.
+# FILL_OVERLOAD_MS=<ms> (fork 7cbfa5102) makes a dyn-* queue that has not
+# drained for that long keep its floor and borrow nothing (fill_overload_ms;
+# 0 or unset: off).
 #
 # shringfix-8 is shring-8 with rmp_fix=1: its head advance serialised, which
 # removes the race that can stop the shared ring for good (19.25).
@@ -125,9 +128,11 @@ select_system() {
             [[ -z "${FILL_HEADROOM:-}" || "$FILL_HEADROOM" =~ ^[0-9]+$ ]] || usage
             [[ -z "${FILL_GROUPS:-}" || "$FILL_GROUPS" =~ ^[1-8]$ ]] || usage
             [[ -z "${FILL_RESERVE:-}" || "$FILL_RESERVE" =~ ^[0-9]+$ ]] || usage
+            [[ -z "${FILL_OVERLOAD_MS:-}" || "$FILL_OVERLOAD_MS" =~ ^[0-9]+$ ]] || usage
             DEVARGS="fill_en=1,fill_budget=$entitled,fill_dyn=1${floor:+,fill_floor=$floor}"
             DEVARGS+="${FILL_WINDOW_MS:+,fill_window_ms=$FILL_WINDOW_MS}${FILL_HEADROOM:+,fill_headroom=$FILL_HEADROOM}"
             DEVARGS+="${FILL_GROUPS:+,fill_groups=$FILL_GROUPS}${FILL_RESERVE:+,fill_reserve=$FILL_RESERVE}"
+            DEVARGS+="${FILL_OVERLOAD_MS:+,fill_overload_ms=$FILL_OVERLOAD_MS}"
             DEVARGS+=",$COMMON_DEVARGS"
             NB_RXD=$FILL_RING_SIZE
             EAL_EXTRA=(--log-level=pmd.net.mlx5:info) ;;

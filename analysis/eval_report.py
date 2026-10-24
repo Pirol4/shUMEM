@@ -43,13 +43,17 @@ SPECIAL_QUEUE = {
     "f4": {"cold": 3, "hot": 0, "twob": 3},
     "f5": 3, "f6": 3, "f7": 3, "f13": 3,
     "f15": {"hot": 0},
+    "f18": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
 }
 SYSTEM_ORDER = ["privring-1024", "privring-512", "privring-256", "privring-128", "privring-64",
-                "shring-8", "shringfix-8", "fill-128", "dyn-32-8", "dyn-64-16", "dyn-128"]
+                "shring-8", "shringfix-8", "fill-32", "fill-64", "fill-96", "fill-128",
+                "dyn-32-8", "dyn-64-16", "dyn-128", "dyn-128-64", "dyn-128-96", "dyn-128-128",
+                "dynov-128"]
 STYLE = {   # as analysis/sweep_report.py, so a system keeps its color
     "privring-1024": ("#2a78d6", "o"), "privring-128": ("#eb6834", "s"),
     "shring-8": ("#1baf7a", "D"), "fill-128": ("#eda100", "^"),
     "dyn-128": ("#e87ba4", "o"), "shringfix-8": ("#7a5bd6", "d"),
+    "dynov-128": ("#1f1f1e", "P"),
 }
 INK, INK_MUTED, GRID = "#1f1f1e", "#6b6a63", "#e4e3dc"
 
@@ -104,6 +108,8 @@ SUMMARY_PATTERNS = {
     "contention": re.compile(r"^\s+contention (\d+)"),
     "ndr": re.compile(r"NDR \S+: ([\d.]+)% of line rate = ([\d.]+) Mpps"),
     "stall": re.compile(r"stall_core: (\d+) stalls"),
+    "overloads": re.compile(r"Rx queue (\d+): FILL credits:.*; (\d+) overloads"),
+    "ethtool": re.compile(r"^\s+ethtool:(.*)$"),
 }
 
 
@@ -156,6 +162,10 @@ def parse_summary_line(run, line):
         run["ndr_pct"], run["ndr_mpps"] = float(m.group(1)), float(m.group(2))
     elif (m := p["stall"].search(line)):
         run["stalls"] = int(m.group(1))
+    if (m := p["overloads"].search(line)):
+        run.setdefault("overloads", {})[int(m.group(1))] = int(m.group(2))
+    if (m := p["ethtool"].search(line)):
+        run["ethtool"] = m.group(1).strip()
 
 
 def read_ddio(root):
@@ -312,8 +322,10 @@ def add_dut(rec, summary, battery, name, index):
     if index < len(dram):
         rec["dram_write"], rec["dram_read"] = dram[index]["write"], dram[index]["read"]
     for key in ("rx_cyc", "fwd_cyc", "ring_objs", "rx_missed", "phy_good", "contention",
-                "stalls"):
+                "stalls", "ethtool"):
         rec[key] = summary.get(key)
+    if summary.get("overloads"):    # each queue's line is printed twice; keyed by queue
+        rec["overloads"] = sum(summary["overloads"].values())
     occ = summary.get("queues", {})
     if occ:
         rec["occ_mean"] = statistics.mean(q["occ_mean"] for q in occ.values())
@@ -357,7 +369,7 @@ METRICS = ["ndr_pct", "ndr_mpps", "gbps", "mpps", "loss_pct", "loss_pkts", "lat_
            "lat_p99", "lat_p9999", "lat_max", "special_p9999", "bystander_p9999",
            "special_probe_loss_pct", "bystander_probe_loss_pct", "dram_write", "rx_cyc",
            "fwd_cyc", "special_fwd_cyc", "occ_mean", "special_occ_mean", "posted_mean",
-           "ddio_hit_pct", "contention", "ring_objs"]
+           "ddio_hit_pct", "contention", "ring_objs", "overloads", "phy_good"]
 
 
 def cells(records):
@@ -586,14 +598,26 @@ def figures(table, records, out):
                                    ("pooled_bystander_p99.99", "bystanders p99.99 (us)", True)],
                 "share of packets to the target queue", out,
                 "Traffic variability (rxBisect Fig. 15)")
-    for payload in (False, True):
-        rows = [dict(c, x=int(re.sub(r"\D", "", c["x"]))) for c in table
-                if c["battery"] == "f8" and str(c["x"]).endswith("p") == payload]
-        line_panels(plt, rows, "f8", [("gbps", "delivered Gb/s", False),
-                                      ("lat_avg", "mean latency (us)", True),
-                                      ("fwd_cyc", "cycles / packet", False)],
-                    "random reads per packet", os.path.join(out, "payload" if payload else "nopayload"),
-                    "Memory intensity, payload %s (shRing Fig. 8)" % ("read" if payload else "untouched"))
+    for battery in ("f8", "f17"):
+        for payload in (False, True):
+            rows = [dict(c, x=int(re.sub(r"\D", "", c["x"]))) for c in table
+                    if c["battery"] == battery and str(c["x"]).endswith("p") == payload]
+            line_panels(plt, rows, battery, [("gbps", "delivered Gb/s", False),
+                                             ("loss_pct", "loss (%)", True),
+                                             ("lat_avg", "mean latency (us)", True),
+                                             ("fwd_cyc", "cycles / packet", False)],
+                        "random reads per packet",
+                        os.path.join(out, battery + ("_payload" if payload else "_nopayload")),
+                        "Memory intensity, payload %s (shRing Fig. 8)"
+                        % ("read" if payload else "untouched"))
+    bar_panels(plt, table, "f16", [("ndr_mpps", "no-drop rate, 64 B (Mpps)", False)], out,
+               "64 B frames: no-drop rate against buffers posted", groups=["ndr"])
+    bar_panels(plt, table, "f18", [("loss_pct", "loss (%)", True),
+                                   ("pooled_special_p99.99", "special queue p99.99 (us)", True),
+                                   ("pooled_bystander_p99.99", "bystanders p99.99 (us)", False),
+                                   ("dram_write", "DRAM write (MB/s)", True)],
+               out, "Overload policy: dyn-128, dyn-128 + fill_overload_ms=50, fill-128")
+    timeseries(plt, records, "f18", out, "Overload policy: load turns pathological at 20 s")
     bar_panels(plt, table, "f9", [("ndr_pct", "no-drop rate (% of line)", False)], out,
                "No-drop rate, 1500 B (shRing Fig. 3, rxBisect Fig. 9)", groups=["multi", "single"])
     line_panels(plt, table, "f10", [("ndr_mpps", "no-drop rate (Mpps)", False)],

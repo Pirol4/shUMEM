@@ -32,6 +32,11 @@
 #   mib=<M>                  size of the work buffer (default 40)
 #   hog=<n>                  n stress-ng STREAM workers on CPUs 9-15 during the
 #                            run (memory-bandwidth co-location, rxBisect Fig. 17)
+#   overload=<ms>            dyn-* queues that do not drain for <ms> keep their
+#                            floor (fill_overload_ms, fork 7cbfa5102)
+# Every run also keeps the kernel's `ethtool -S` counters of the experiment
+# NIC before and after the traffic and puts their non-zero drop/discard
+# deltas in the summary: the NIC's own view of where packets were lost.
 # e.g. `--hot-share 0.5` among the extra args makes queue 0 hot (17.7).
 #
 # Environment:
@@ -100,10 +105,10 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
 
 # The build must have the knobs the sweep files use.
 # fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5;
-# fork 290de897f: synthetic work and occupancy in l3fwd.
+# fork 290de897f: synthetic work and occupancy in l3fwd; 7cbfa5102: overload.
 grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "$L3FWD_BIN" \
-    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" \
-    || die "$L3FWD_BIN is missing or older than fork 290de897f:
+    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "fill_overload_ms" "$L3FWD_BIN" \
+    || die "$L3FWD_BIN is missing or older than fork 7cbfa5102:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
 # HDR latency needs the hdrh module where rate_sweep.py runs.
 "${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \
@@ -225,6 +230,24 @@ stop_hog() {
     HOG_PID=""
 }
 trap 'stop_hog; stop_stall; stop_l3fwd' EXIT
+
+# The kernel keeps the experiment NIC's hardware counters while DPDK drives it
+# (bifurcated mlx5): drops inside the NIC that DPDK's xstats do not show.
+ethtool_snapshot() {
+    [[ -n "$exp_if" ]] || return 0
+    sudo -n ethtool -S "$exp_if" 2>/dev/null >"$1" || true
+}
+
+ethtool_deltas() {
+    local before="$OUT_DIR/$1.ethtool0" after="$OUT_DIR/$1.ethtool1"
+    [[ -s "$before" && -s "$after" ]] || return 0
+    awk -F: 'NR == FNR { v[$1] = $2; next }
+             $1 ~ /discard|drop|out_of_buffer|buffer_passed|buf_full|missed|error|pause/ {
+                 d = $2 - v[$1]
+                 if (d != 0) { gsub(/^ +/, "", $1); out = out sprintf(" %s=%.0f", $1, d) }
+             }
+             END { if (out != "") print "   ethtool:" out }' "$before" "$after"
+}
 trap 'log "interrupted"; exit 130' INT TERM
 
 free_label() {
@@ -302,6 +325,7 @@ summarize() {
         # stress-ng's metrics line; its format varies by version, so take
         # whatever mentions the stressor, and never let a miss end the sweep.
         [[ ! -s "$OUT_DIR/$label.hog" ]] || { grep -E 'stream' "$OUT_DIR/$label.hog" | tail -2 | sed 's/^/   hog: /' || true; }
+        ethtool_deltas "$label" || true
     } | tee -a "$SUMMARY"
 }
 
@@ -309,7 +333,7 @@ run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
     local extra=() out env_args=() rates="$RATES" duration="$DURATION" stall="" cache="" pcm=memory ops="" groups="" reserve="" arg
-    local work="" target="" payload="" mib="" hog=""
+    local work="" target="" payload="" mib="" hog="" overload=""
     for arg in "$@"; do
         case "$arg" in
             rates=*)    rates="${arg#rates=}" ;;
@@ -336,6 +360,8 @@ run_one() {
                         [[ "$mib" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want mib=<n>" ;;
             hog=*)      hog="${arg#hog=}"
                         [[ "$hog" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want hog=<n>" ;;
+            overload=*) overload="${arg#overload=}"
+                        [[ "$overload" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want overload=<ms>" ;;
             *)          extra+=("$arg") ;;
         esac
     done
@@ -353,6 +379,7 @@ run_one() {
     [[ -z "$target" ]] || env_args+=("L3FWD_WORK_TARGET=$target")
     [[ -z "$payload" ]] || env_args+=("L3FWD_WORK_PAYLOAD=$payload")
     [[ -z "$mib" ]] || env_args+=("L3FWD_WORK_MIB=$mib")
+    [[ -z "$overload" ]] || env_args+=("FILL_OVERLOAD_MS=$overload")
     env_args+=("L3FWD_OCCUPANCY_US=$OCCUPANCY_US")
 
     log "$label: starting $system ${env_args[*]:-}"
@@ -390,6 +417,7 @@ run_one() {
         log "$label: stalling CPU $s_core for $s_us us every $s_ms ms"
     fi
 
+    ethtool_snapshot "$OUT_DIR/$label.ethtool0"
     log "$label: traffic, rates $rates x ${duration} s ${extra[*]:-}"
     # Each result line marks the end of one window; stamp it with the dut's
     # clock, the one PCM writes, for DRAM per window. Unbuffered: over ssh
@@ -407,10 +435,11 @@ run_one() {
     fi
     stop_stall
     stop_hog
+    ethtool_snapshot "$OUT_DIR/$label.ethtool1"
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} overload=${overload:-0} extra=${extra[*]:--}"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }

@@ -1,0 +1,77 @@
+# Why dyn-128 stops at ~88 Mpps with 64 B frames (20.7, 20.9): no-drop rate
+# and a fixed 100% window for static budgets of 32-128 posted buffers,
+# privRing rings of 64/128, and dyn-128 with floors 32-128, n = 3, with the
+# NIC's own drop counters (`ethtool -S` deltas in the summary). If the
+# NIC needs a minimum of buffers posted per queue at this packet rate,
+# fill-32/64 fail like dyn-128 and a floor of ~96-128 fixes dyn.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f16_ndr_privring-128_n01                 privring-128   -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-128_n01                privring-128   -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dynov-128_n01                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-128_n01                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-128_n01                 dyn-128-128    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-64_n01                     fill-64        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-64_n01                 privring-64    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128_n01                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-64_n01                      fill-64        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-96_n01                  dyn-128-96     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128_n01                      dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-96_n01                   dyn-128-96     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-64_n01                   dyn-128-64     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-32_n01                      fill-32        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dynov-128_n01                   dyn-128        -  -  rates=100 duration=10 --pkt-size 60 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_privring-64_n01                  privring-64    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-32_n01                     fill-32        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-96_n01                      fill-96        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-128_n01                     fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-96_n01                     fill-96        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-64_n01                  dyn-128-64     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-128_n01                  dyn-128-128    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+f16_ndr_dyn-128-64_n02                   dyn-128-64     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-32_n02                     fill-32        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-128_n02                privring-128   -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-96_n02                      fill-96        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128_n02                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dynov-128_n02                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-128_n02                  dyn-128-128    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dynov-128_n02                   dyn-128        -  -  rates=100 duration=10 --pkt-size 60 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-64_n02                 privring-64    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-64_n02                  dyn-128-64     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-128_n02                 dyn-128-128    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-96_n02                  dyn-128-96     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-128_n02                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128_n02                      dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-64_n02                      fill-64        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-96_n02                     fill-96        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-96_n02                   dyn-128-96     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-64_n02                     fill-64        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_privring-128_n02                 privring-128   -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-32_n02                      fill-32        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_privring-64_n02                  privring-64    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-128_n02                     fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+f16_r100_fill-32_n03                     fill-32        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_privring-128_n03                 privring-128   -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-96_n03                     fill-96        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128_n03                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-64_n03                   dyn-128-64     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-64_n03                 privring-64    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-128_n03                     fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_privring-64_n03                  privring-64    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-96_n03                   dyn-128-96     -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-64_n03                      fill-64        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128_n03                      dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-32_n03                      fill-32        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_privring-128_n03                privring-128   -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-128_n03                 dyn-128-128    -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-64_n03                     fill-64        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-96_n03                  dyn-128-96     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_fill-128_n03                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_fill-96_n03                      fill-96        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dyn-128-64_n03                  dyn-128-64     -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dyn-128-128_n03                  dyn-128-128    -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_r100_dynov-128_n03                   dyn-128        -  -  rates=100 duration=10 --pkt-size 60 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f16_ndr_dynov-128_n03                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 overload=50 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required

@@ -5,7 +5,9 @@
 # e0-e8 are the first pass (harness/sweeps/eval, CLAUDE.md 19.26), f0-f15 the
 # paper-style evaluation (harness/sweeps/eval2, CLAUDE.md 20). Run the smoke
 # battery (e0, f0) alone first and read its summary before the rest. A battery
-# started again resumes after its last finished run (RESUME=1).
+# started again resumes after its last finished run (RESUME=1). KEEP_GOING=1
+# goes on to the next battery when one fails (unattended nights); run the
+# same command again later to finish the failed one.
 #
 # Usage (on dut, inside tmux, as your own user):
 #   TGEN_HOST=<tgen control name> TGEN_MAC=<mac> harness/run_eval.sh f0
@@ -27,10 +29,15 @@ elif [[ "$1" == all2 ]]; then
     set -- f1 f4 f6 f7 f9 f3 f10 f8 f11 f12 f13 f5 f2 f14 f15
 fi
 
+failed=()
 for battery in "$@"; do
     plan=("$SWEEPS_DIR"/eval*/"${battery}"_*.txt)
     [[ -r "${plan[0]}" ]] || { echo "ERROR: no battery $battery in $SWEEPS_DIR/eval*" >&2; exit 1; }
     echo "[eval $(date +%H:%M:%S)] battery $battery: ${plan[0]##*/}"
-    RESUME="${RESUME:-1}" CSV="$EXP_DIR/eval_${battery}.csv" "$SCRIPT_DIR/sweep.sh" "${plan[0]}"
+    if ! RESUME="${RESUME:-1}" CSV="$EXP_DIR/eval_${battery}.csv" "$SCRIPT_DIR/sweep.sh" "${plan[0]}"; then
+        echo "[eval $(date +%H:%M:%S)] battery $battery FAILED"
+        [[ "${KEEP_GOING:-0}" == 1 ]] || exit 1
+        failed+=("$battery")
+    fi
 done
-echo "[eval $(date +%H:%M:%S)] done: $*"
+echo "[eval $(date +%H:%M:%S)] done: $*${failed[*]:+ (failed: ${failed[*]})}"
