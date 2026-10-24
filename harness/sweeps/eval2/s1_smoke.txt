@@ -4,7 +4,7 @@
 # the 64 B run prints an `ethtool:` line; the mi64 run has WORK lines.
 #
 # label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
-s1_pv2400_dynov-128                      dyn-128        -  -  rates=98 duration=20 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 overload=50 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-s1_cold_dynov-128                        dyn-128        -  -  rates=98 duration=20 stall=4:1000:100 overload=50 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s1_pv2400_dynov-128                      dyn-128        -  -  rates=98 duration=20 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 overload=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s1_cold_dynov-128                        dyn-128        -  -  rates=98 duration=20 stall=4:1000:100 overload=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
 s1_r100_dyn-128                          dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --lat-queues all --lat-pps 1000 --hdrh required
 s1_mi64_privring-1024                    privring-1024  -  -  rates=98 duration=10 work=64 --lat-queues all --lat-pps 10000 --hdrh required

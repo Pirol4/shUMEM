@@ -1,0 +1,7 @@
+# Smoke of fork 93066965d with overload=20 (~3 min): pv2400 must now show
+# queue 3's p99 well under s1's 13 ms with the same loss; the cold stall
+# still 0 overloads and ~42 k lost in 20 s.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+s2_pv2400_dynov-128                      dyn-128        -  -  rates=98 duration=20 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 overload=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s2_cold_dynov-128                        dyn-128        -  -  rates=98 duration=20 stall=4:1000:100 overload=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

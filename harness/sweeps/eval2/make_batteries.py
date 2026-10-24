@@ -294,9 +294,11 @@ def f15():
 
 # --- Round 2 (CLAUDE.md 20.11): 64 B, a heavier NF, the overload policy -----------
 
-# dyn-128 with fill_overload_ms=50: a queue that has not drained for 50 ms keeps
-# its floor. The label names it dynov-128; the system run is dyn-128.
-OVERLOAD = "overload=50"
+# dyn-128 with fill_overload_ms=20: a queue that has not drained for 20 ms keeps
+# its floor (s1 showed 50 ms checked every 256 bursts too slow on a slow core;
+# fork 93066965d checks every 16 full bursts too). The label names it
+# dynov-128; the system run is dyn-128.
+OVERLOAD = "overload=20"
 POLICY = [("dyn-128", "dyn-128", ""), ("dynov-128", "dyn-128", OVERLOAD),
           ("fill-128", "fill-128", "")]
 
@@ -329,6 +331,21 @@ def s1():
         "run's FILL credits line for queue 3 counts overloads > 0 and its budget",
         "now is 32; the cold stall has 0 overloads and loses like f4 (~63 k);",
         "the 64 B run prints an `ethtool:` line; the mi64 run has WORK lines.",
+    ], cells)
+
+
+def s2():
+    tv = weights(0.0722)
+    cells = [
+        line("s2_pv2400_dynov-128", "dyn-128", "rates=98 duration=20 work=2 target=4:2400 "
+             "--queue-weights %s %s %s %s" % (tv, OVERLOAD, WARM, LAT)),
+        line("s2_cold_dynov-128", "dyn-128", "rates=98 duration=20 stall=4:1000:100 %s %s %s"
+             % (OVERLOAD, WARM, LAT)),
+    ]
+    write("s2_smoke.txt", [
+        "Smoke of fork 93066965d with overload=20 (~3 min): pv2400 must now show",
+        "queue 3's p99 well under s1's 13 ms with the same loss; the cold stall",
+        "still 0 overloads and ~42 k lost in 20 s.",
     ], cells)
 
 
@@ -394,7 +411,7 @@ def f18():
     tests += [("bal", "rates=98 duration=60 %s %s" % (WARM, LAT)),
               ("hotq", "rates=98 duration=30 --hot-share 0.5 %s %s" % (WARM, LAT))]
     write("f18_overload.txt", [
-        "The overload policy (fill_overload_ms=50, fork 7cbfa5102): dyn-128 as",
+        "The overload policy (fill_overload_ms=20, forks 7cbfa5102 + 93066965d): dyn-128 as",
         "before, dyn-128 with it (dynov-128), and fill-128, n = 3, on the slow",
         "target of f6 and f13 (where dyn's queue held ~800 packets: p99 13-35 ms),",
         "the stalls of f4/f5 (which it must leave alone: a stalled core drains",
@@ -404,7 +421,7 @@ def f18():
 
 def main():
     for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
-                    s1, f16, f17, f18):
+                    s1, s2, f16, f17, f18):
         battery()
 
 
