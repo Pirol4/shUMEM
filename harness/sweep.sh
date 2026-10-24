@@ -36,7 +36,7 @@
 #                            floor (fill_overload_ms; default 20 since fork
 #                            b96c6a87a, 0 = off)
 #   runway=<ns>              dyn-* floor = that much of the queue's traffic
-#                            (fill_runway_ns; default 7000, 0 = off)
+#                            (fill_runway_ns; default 12000, 0 = off)
 # Every run also keeps the kernel's `ethtool -S` counters of the experiment
 # NIC before and after the traffic and puts their non-zero drop/discard
 # deltas in the summary: the NIC's own view of where packets were lost.
@@ -108,10 +108,11 @@ tgen_ip="$(getent hosts "$TGEN_HOST" | awk '{print $1; exit}')"
 
 # The build must have the knobs the sweep files use.
 # fork a8a7459be: mempool groups/ops in l3fwd, rmp_fix and fill_groups in mlx5;
-# fork 290de897f: synthetic work and occupancy in l3fwd; b96c6a87a: runway.
+# fork 290de897f: synthetic work and occupancy in l3fwd; 5f3a20100: overload
+# on an empty poll, runway 12 us.
 grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "$L3FWD_BIN" \
-    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "fill_runway_ns" "$L3FWD_BIN" \
-    || die "$L3FWD_BIN is missing or older than fork b96c6a87a:
+    && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "without an empty poll" "$L3FWD_BIN" \
+    || die "$L3FWD_BIN is missing or older than fork 5f3a20100:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
 # HDR latency needs the hdrh module where rate_sweep.py runs.
 "${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \

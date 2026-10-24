@@ -45,6 +45,7 @@ SPECIAL_QUEUE = {
     "f15": {"hot": 0},
     "f18": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
     "f19": {"pv": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
+    "f20": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
 }
 SYSTEM_ORDER = ["privring-1024", "privring-512", "privring-256", "privring-128", "privring-64",
                 "shring-8", "shringfix-8", "fill-32", "fill-64", "fill-96", "fill-128",
@@ -211,7 +212,7 @@ def special_queue(battery, name):
 
 def variable(battery, name, row):
     """The cell's x: a number where the battery sweeps one, else the name."""
-    if battery == "f3":
+    if battery in ("f3", "f21"):
         return float(row["rate_pct"])
     if battery == "f7":
         return int(re.sub(r"\D", "", name)) / 100.0
@@ -582,6 +583,12 @@ def figures(table, records, out):
                                    ("lat_p99", "p99 (us)", False),
                                    ("pooled_all_p99.99", "p99.99 (us)", True)],
                 "offered load (% of line rate)", out, "Latency against load")
+    line_panels(plt, table, "f21", [("lat_avg", "mean latency (us)", True),
+                                    ("lat_p99", "p99 (us)", True),
+                                    ("loss_pct", "loss (%)", True),
+                                    ("occ_mean", "ring occupancy (pkts)", True)],
+                "offered load (% of line rate)", out,
+                "Latency against load, heavy NF (96 reads, payload read)")
     bar_panels(plt, table, "f4", [("loss_pct", "loss (%)", True),
                                   ("bystander_probe_loss_pct", "bystander loss (%)", True),
                                   ("pooled_special_p99.99", "stalled queue p99.99 (us)", False),

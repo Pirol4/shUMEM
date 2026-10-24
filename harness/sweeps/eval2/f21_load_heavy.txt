@@ -1,0 +1,24 @@
+# Latency against offered load with a heavy NF (96 random reads per packet,
+# payload read), 50,60,70,80,85,90,95,98,100% of line rate, 20 s each, n = 3: where each
+# system's queue starts to build (CLAUDE.md 20.14). privring-1024 saturates
+# near 98% here; the systems with a small working set have ~10% headroom.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f21_load_privring-1024_n01               privring-1024  -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_fill-128_n01                    fill-128       -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_dyn-128_n01                     dyn-128        -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_shringfix-8_n01                 shringfix-8    -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_privring-128_n01                privring-128   -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f21_load_privring-128_n02                privring-128   -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_privring-1024_n02               privring-1024  -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_dyn-128_n02                     dyn-128        -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_shringfix-8_n02                 shringfix-8    -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_fill-128_n02                    fill-128       -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f21_load_privring-128_n03                privring-128   -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_privring-1024_n03               privring-1024  -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_fill-128_n03                    fill-128       -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_shringfix-8_n03                 shringfix-8    -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f21_load_dyn-128_n03                     dyn-128        -  -  rates=50,60,70,80,85,90,95,98,100 duration=20 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

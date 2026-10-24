@@ -488,9 +488,87 @@ def f19():
     ], body)
 
 
+# --- Round 4 (CLAUDE.md 20.16): overload on an empty poll, runway 12 us ---------------
+
+def s4():
+    cells = [
+        line("s4_r100_dyn-128", "dyn-128", "rates=100 duration=10 --pkt-size 60 %s %s"
+             % (WARM, LAT_NDR)),
+        line("s4_mi128p_dyn-128", "dyn-128", "rates=98 duration=20 work=128 payload=1 %s %s"
+             % (WARM, LAT)),
+        line("s4_pv2400_dyn-128", "dyn-128", "rates=98 duration=20 work=2 target=4:2400 "
+             "--queue-weights %s %s %s" % (weights(0.0722), WARM, LAT)),
+        line("s4_bal_dyn-128", "dyn-128", "rates=98 duration=10 %s %s" % (WARM, LAT)),
+    ]
+    write("s4_smoke.txt", [
+        "Smoke of fork 5f3a20100 (~5 min): the 64 B run's queues show a rate floor",
+        "of 128 and no rx_prio0_buf_discard; mi128p a handful of overloads per",
+        "queue, not hundreds; pv2400 overloads > 0 on queue 3 only; balanced: rate",
+        "floor 32, no overload.",
+    ], cells)
+
+
+def f20():
+    old = [("dyn-128", "dyn-128", ""), ("dynold-128", "dyn-128", OLD)]
+    cells = []
+    for name, system, extra in old + [("fill-128", "fill-128", "")]:
+        cells.append(("ndr64", name, system, "duration=10 --pkt-size 60 --search 30,100 %s %s %s"
+                      % (WARM, LAT_NDR, extra)))
+        cells.append(("r100", name, system, "rates=100 duration=10 --pkt-size 60 %s %s %s"
+                      % (WARM, LAT_NDR, extra)))
+    heavy = old + [("fill-128", "fill-128", ""), ("privring-1024", "privring-1024", ""),
+                   ("shringfix-8", "shringfix-8", "")]
+    for test, opts in (("mi96p", "work=96 payload=1"), ("mi128", "work=128 payload=0"),
+                       ("mi128p", "work=128 payload=1")):
+        for name, system, extra in heavy:
+            cells.append((test, name, system, "rates=98 duration=30 %s %s %s %s"
+                          % (opts, WARM, LAT, extra)))
+    tv = weights(0.0722)
+    for test, opts in (("pv2400", "rates=98 duration=30 work=2 target=4:2400 --queue-weights %s" % tv),
+                       ("pv6400", "rates=98 duration=30 work=2 target=4:6400 --queue-weights %s" % tv),
+                       ("switch", "rates=98 duration=40 work=2 target=4:800 --queue-weights %s "
+                                  "--schedule switch:20:%s --timeseries" % (tv, weights(1)))):
+        for name, system, extra in old + [("fill-128", "fill-128", "")]:
+            cells.append((test, name, system, "%s %s %s %s" % (opts, WARM, LAT, extra)))
+    for test, opts in (("cold", "stall=4:1000:100"), ("hot", "stall=1:1000:100 --hot-share 0.5"),
+                       ("twob", "stall=4:1000:100 --hot-share 0.5"), ("len2000", "stall=4:2000:100"),
+                       ("hotq", "--hot-share 0.5")):
+        for name, system, extra in old:
+            cells.append((test, name, system, "rates=98 duration=30 %s %s %s %s"
+                          % (opts, WARM, LAT, extra)))
+    for name, system, extra in old:
+        cells.append(("bal", name, system, "rates=98 duration=60 %s %s %s" % (WARM, LAT, extra)))
+    body = []
+    for k in range(1, 4):
+        order = list(cells)
+        random.Random("f20-%d" % k).shuffle(order)
+        body.append("# round %d" % k)
+        body += [line("f20_%s_%s_n%02d" % (cell, name, k), system, opts.strip())
+                 for cell, name, system, opts in order]
+    write("f20_confirm.txt", [
+        "Fork 5f3a20100 (overload on an empty poll, runway 12 us) as dyn-128 against",
+        "dynold-128 (both off), n = 3: 64 B (no-drop rate, 100% window) beside",
+        "fill-128; heavy NF at saturation (96 reads with payload, 128 with and",
+        "without) beside fill-128, privring-1024 and shringfix-8; the slow target",
+        "and the switch; stalls, hot queue and balanced load, which must not change.",
+    ], body)
+
+
+def f21():
+    rates = "50,60,70,80,85,90,95,98,100"
+    cells = [("load", s, "rates=%s duration=20 work=96 payload=1 %s %s" % (rates, WARM, LAT))
+             for s in CORE]
+    write("f21_load_heavy.txt", [
+        "Latency against offered load with a heavy NF (96 random reads per packet,",
+        "payload read), %s%% of line rate, 20 s each, n = 3: where each" % rates,
+        "system's queue starts to build (CLAUDE.md 20.14). privring-1024 saturates",
+        "near 98% here; the systems with a small working set have ~10% headroom.",
+    ], rounds("f21", cells, 3))
+
+
 def main():
     for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
-                    s1, s2, f16, f17, f18, s3, f19):
+                    s1, s2, f16, f17, f18, s3, f19, s4, f20, f21):
         battery()
 
 

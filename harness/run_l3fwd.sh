@@ -35,8 +35,9 @@
 # FILL_OVERLOAD_MS=<ms> (fork 7cbfa5102) makes a dyn-* queue that has not
 # drained for that long keep its floor and borrow nothing (fill_overload_ms;
 # default 20 since fork b96c6a87a, 0: off). FILL_RUNWAY_NS=<ns> (fork
-# b96c6a87a, fill_runway_ns, default 7000, 0: off) raises a queue's floor to
-# that much of its own traffic, for 64 B frames at line rate (CLAUDE.md 20.12).
+# b96c6a87a, fill_runway_ns, default 12000 since 5f3a20100, 0: off) raises a
+# queue's floor to that much of its own traffic, for 64 B frames at line rate
+# (CLAUDE.md 20.12, 20.15).
 #
 # shringfix-8 is shring-8 with rmp_fix=1: its head advance serialised, which
 # removes the race that can stop the shared ring for good (19.25).

@@ -1,0 +1,10 @@
+# Smoke of fork 5f3a20100 (~5 min): the 64 B run's queues show a rate floor
+# of 128 and no rx_prio0_buf_discard; mi128p a handful of overloads per
+# queue, not hundreds; pv2400 overloads > 0 on queue 3 only; balanced: rate
+# floor 32, no overload.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+s4_r100_dyn-128                          dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+s4_mi128p_dyn-128                        dyn-128        -  -  rates=98 duration=20 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s4_pv2400_dyn-128                        dyn-128        -  -  rates=98 duration=20 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+s4_bal_dyn-128                           dyn-128        -  -  rates=98 duration=10 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

@@ -1,0 +1,136 @@
+# Fork 5f3a20100 (overload on an empty poll, runway 12 us) as dyn-128 against
+# dynold-128 (both off), n = 3: 64 B (no-drop rate, 100% window) beside
+# fill-128; heavy NF at saturation (96 reads with payload, 128 with and
+# without) beside fill-128, privring-1024 and shringfix-8; the slow target
+# and the switch; stalls, hot queue and balanced load, which must not change.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f20_mi96p_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_cold_dynold-128_n01                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_switch_dyn-128_n01                   dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_ndr64_fill-128_n01                   fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_bal_dynold-128_n01                   dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_r100_dyn-128_n01                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_hotq_dynold-128_n01                  dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_bal_dyn-128_n01                      dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_ndr64_dynold-128_n01                 dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_mi128p_dynold-128_n01                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_len2000_dynold-128_n01               dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_shringfix-8_n01               shringfix-8    -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv6400_dyn-128_n01                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hot_dynold-128_n01                   dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi96p_dynold-128_n01                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi96p_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_cold_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_dynold-128_n01                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_twob_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_twob_dynold-128_n01                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_len2000_dyn-128_n01                  dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_switch_fill-128_n01                  fill-128       -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_dyn-128_n01                   dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv6400_dynold-128_n01                dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_fill-128_n01                  fill-128       -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hot_dyn-128_n01                      dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_fill-128_n01                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_switch_dynold-128_n01                dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hotq_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_dynold-128_n01                  dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_mi128p_privring-1024_n01             privring-1024  -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_dyn-128_n01                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_dynold-128_n01                dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_pv6400_fill-128_n01                  fill-128       -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_fill-128_n01                  fill-128       -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_ndr64_dyn-128_n01                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+f20_pv2400_dynold-128_n02                dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_twob_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_switch_dyn-128_n02                   dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_bal_dynold-128_n02                   dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_ndr64_dynold-128_n02                 dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_hotq_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_ndr64_fill-128_n02                   fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_len2000_dynold-128_n02               dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_pv6400_dynold-128_n02                dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_dyn-128_n02                   dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_dynold-128_n02                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_cold_dynold-128_n02                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_shringfix-8_n02               shringfix-8    -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv6400_fill-128_n02                  fill-128       -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_twob_dynold-128_n02                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_pv2400_fill-128_n02                  fill-128       -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_dynold-128_n02                  dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_mi96p_dynold-128_n02                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_bal_dyn-128_n02                      dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_cold_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_privring-1024_n02             privring-1024  -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hot_dynold-128_n02                   dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_r100_dyn-128_n02                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_mi128_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_len2000_dyn-128_n02                  dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_switch_fill-128_n02                  fill-128       -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_fill-128_n02                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_hot_dyn-128_n02                      dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_dynold-128_n02                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_switch_dynold-128_n02                dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_fill-128_n02                  fill-128       -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_dyn-128_n02                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv6400_dyn-128_n02                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hotq_dynold-128_n02                  dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_ndr64_dyn-128_n02                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+f20_pv6400_fill-128_n03                  fill-128       -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_len2000_dynold-128_n03               dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_ndr64_fill-128_n03                   fill-128       -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_hotq_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_twob_dynold-128_n03                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_twob_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_dynold-128_n03                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi96p_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_dynold-128_n03                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_hot_dyn-128_n03                      dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_privring-1024_n03             privring-1024  -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_bal_dyn-128_n03                      dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_fill-128_n03                  fill-128       -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_switch_fill-128_n03                  fill-128       -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_pv2400_dynold-128_n03                dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_r100_fill-128_n03                    fill-128       -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_switch_dynold-128_n03                dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128p_dyn-128_n03                   dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_len2000_dyn-128_n03                  dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_hotq_dynold-128_n03                  dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_hot_dynold-128_n03                   dyn-128        -  -  rates=98 duration=30 stall=1:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_dyn-128_n03                     dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_pv2400_dyn-128_n03                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128p_fill-128_n03                  fill-128       -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi128_dynold-128_n03                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_ndr64_dyn-128_n03                    dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f20_mi128p_shringfix-8_n03               shringfix-8    -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_cold_dynold-128_n03                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_pv6400_dyn-128_n03                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_r100_dynold-128_n03                  dyn-128        -  -  rates=100 duration=10 --pkt-size 60 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_bal_dynold-128_n03                   dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_mi128_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_switch_dyn-128_n03                   dyn-128        -  -  rates=98 duration=40 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_mi96p_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f20_ndr64_dynold-128_n03                 dyn-128        -  -  duration=10 --pkt-size 60 --search 30,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+f20_pv6400_dynold-128_n03                dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f20_cold_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
