@@ -1917,3 +1917,20 @@ Approved by the user: (1) driver fix, (2) confirmation battery, (3) load–laten
 - **Batteries:** `s4` smoke (4 runs, ~5 min: 64 B rate floor 128 and no `rx_prio0_buf_discard`; mi128p a handful of overloads, not hundreds; pv2400 overloads on queue 3 only; balanced rate floor 32). `f20` (126 runs, ~3 h, n = 3): 64 B NDR/100% (dyn, dynold, fill-128); heavy NF mi96p/mi128/mi128p (dyn, dynold, fill-128, privring-1024, shringfix-8); pv2400, pv6400, switch (dyn, dynold, fill-128); cold, hot, two borrowers, 2 ms, hot queue, balanced (dyn, dynold). `f21` (15 runs, ~1 h): latency against offered load 50–100% with 96 reads and payload, 5 systems, n = 3 — the paper's latency figure (20.14).
 - **Runbook (dut):** pull + ninja the fork, pull `/local/repository`, then in tmux `KEEP_GOING=1 TGEN_HOST=sm110p-10s10607.wisc.cloudlab.us TGEN_MAC=b8:3f:d2:13:08:9e harness/run_eval.sh s4 f20 f21` (~4.2 h).
 - **Predictions:** 64 B line rate for dyn with 0 NIC drops; mi128p loss ≤ dynold's 6.1% with p99 ≤ 190 µs and overloads in single digits per queue; slow target as f19 (p99 ~1 ms); everything else at 1500 B identical; f21: privring-1024's latency rises from ~95% offered, the small-working-set systems stay flat to 98–100%.
+
+### 20.17 Round 4 results: s4, f20, f21 (2026-10-24, fork `5f3a20100`; 145 runs, complete)
+
+dyn-128 = current defaults (overload on an empty poll, 20 ms; runway 12 µs); dynold-128 = both off. n = 3. Figures/tables for all rounds regenerated in `docs/eval2/` (f20, f21 new).
+
+- **64 B fixed:** dyn-128 NDR **100%** (148.8 Mpps; dynold 59.3%), 100% window **0 lost** (dynold 4.0%); s4: rate floor 128 on all 8 queues, `rx_prio0_buf_discard` 3,913 per 10 s (was ~128 M).
+- **1500 B unchanged:** balanced DRAM 31 vs 29 MB/s, loss 0; cold 0.0260%, hot 0.4629%, two borrowers 0, 2 ms 0.1508%, hot queue 0 — identical to dynold.
+- **Slow target unchanged from f19:** pv2400 p99 1,002 µs (dynold 13,447; fill 2,596), pv6400 2,644 (35,540; 6,868), switch 337 (4,551; 872); same loss.
+- **Heavy NF at saturation — dyn-128 now leads on throughput and loss:**
+
+| 128 reads | privring-1024 | shRing | fill-128 | dynold-128 | **dyn-128** |
+|---|---|---|---|---|---|
+| untouched: Gb/s / loss / mean / p99 / p99.99 (µs) | 88.1 / 10.1% / 1,168 / 1,233 / 1,254 | 92.6 / 5.56% / 66 / 177 / 194 | 97.8 / 0.237% / 63 / 172 / 183 | 97.7 / 0.344% / 120 / 632 / 674 | **97.9 / 0.111% / 52 / 175 / 554** |
+| payload read | 75.9 / 22.6% / 1,356 / 1,431 / 1,455 | 83.8 / 14.5% / 71 / 197 / 220 | 92.4 / 5.76% / 168 / 188 / 198 | 92.2 / 5.92% / 168 / 189 / 199 | **94.0 / 4.07% / 81 / 369 / 970** |
+
+  dyn-128: +24% Gb/s over privring-1024, +12% over shRing, +1.8% over the static budget (payload read); the lowest loss and mean latency of all. **Remaining cost: the tail at full saturation** (p99.99 554–970 µs against fill's 183–198): a few queues still leave overload on an occasional empty poll (s4 mi128p: 2–397 overloads per queue, from 806–1,634), regrow and hold a long queue briefly. Candidate fix (not done): after leaving overload, no borrowing beyond the entitlement for one window (cool-down).
+- **Latency against load with a heavy NF (f21, 96 reads, payload; the paper's latency figure):** every system ties from 50% to 95% (p99 53–90 µs falling with load; privring-1024 a few µs higher from 95%). **At 98% privring-1024's queue builds: mean 172 µs, p99 1,139 µs, 0.79% lost, against 38 µs / 52–56 µs / 0 for privring-128, fill-128, dyn-128** (4.5× mean, 22× p99), shRing 41 / 56 µs (+3 µs of synchronisation). At exactly 100% offered every system queues on Tx (mean ~300 µs, p99 ~980 µs; the knife edge of 18.7), privring-1024 1,123 µs and 7.9% lost. DRAM write at 98%: dyn 836 MB/s against 1,350–1,626 for the other small-working-set systems and 12,785 for privring-1024. (f21's occupancy column is per run, not per rate.)
