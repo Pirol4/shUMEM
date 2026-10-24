@@ -1851,3 +1851,36 @@ Decided with the user: test (1) a heavier NF and (2) the 64 B drops with new bat
 - **Predictions:** f18 — dynov-128's slow-target p99 falls from 13–35 ms to below fill-128's 2.6–6.7 ms (it keeps 32, fill keeps 128), same loss; stalls, balanced and hot queue identical to dyn-128. f16 — if the NIC needs a minimum posted per queue at 18.6 Mpps, fill-32/64 and privring-64 fall short like dyn-128 and the `ethtool:` line names the counter (e.g. `rx_discards_phy`); a floor near 96–128 restores line rate. f17 — delivered Gb/s orders as f8's cycles: dyn ≥ privring-128/fill > privring-1024 ≫ shRing once the cores saturate (~60–100 reads).
 - **s1 on the NIC (2026-10-24 01:20):** the policy fired (queue 3: 2 overloads, budget 32 at the end, p50 880 µs) with the same loss (0.363%), but p99 stayed 13 ms: checked only at the clock read every 256 bursts (~130 ms apart at ~0.5 ms per burst on that core), it took ~260 ms to see the overload, long enough for the queue to grow to 800 again after the gap between the warm-up and the measured window. **Fork `93066965d`** also checks every 16 full bursts in a row (one TSC read, paid only by a queue that is behind), and the batteries use `overload=20`. Cold stall with the policy: 0 overloads, 41.8 k lost in 20 s (= f4's 62.6 k per 30 s) ✓. **64 B: `ethtool` names the drop: `rx_prio0_buf_discard` = 6,818,973 against TRex's 6,824,937** — the NIC's internal receive buffer overflows while it waits for posted descriptors, which supports the too-few-posted hypothesis; dyn-128's queue 3 budget was 53 on average (max 93) at 18.6 Mpps. `s2` (2 runs) checks the fix before f16 f18 f17.
 
+
+### 20.12 Round 2 results (night of 2026-10-23/24: s2, f16, f18, f17; 365 runs, all complete)
+
+Figures and tables regenerated for both rounds in `docs/eval2/` (f16, f17_*, f18, f18_series new).
+
+**Overload policy (s2, f18; fork `93066965d`, `overload=20`) — works, no false positive.** It fired 2× in every slow-target run (warm-up and measured window: the traffic restarts between them), 1× in each switch run, and **0× in all 27 stall, balanced and hot-queue runs**. Loss, DRAM and cycles identical to dyn-128 everywhere (cold 0.0260%, hot 0.463%, two borrowers 0, 500 µs 0, 2 ms 0.151%). Slow target queue (pooled over n = 3, µs):
+
+| | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|
+| 2,400 reads: fill-128 / dyn-128 / **dynov-128** | 2,471 / 13,319 / **869** | 2,641 / 13,519 / **1,037** | 2,651 / 13,559 / 6,807 | 2,661 / 13,743 / 13,319 |
+| 3,200 reads | 3,339 / 17,791 / **1,212** | 3,511 / 17,983 / **1,380** | 3,525 / 18,015 / 10,287 | 3,535 / 18,111 / 17,807 |
+| 6,400 reads | 6,811 / 35,455 / **2,573** | 6,987 / 35,711 / **2,745** | 7,007 / 35,775 / 22,319 | 7,035 / 35,999 / 35,519 |
+| switch (f13) | 79 / 79 / 79 | 893 / 4,587 / **358** | 900 / 4,603 / **363** | 904 / 4,619 / 4,551 |
+
+- **Up to p99 the overloaded queue now waits 2.5–2.8× less than the static budget and 13× less than dyn-128 did**, at the same loss: it keeps its floor (32) instead of 128 or ~800.
+- **Residual: the onset.** Before the policy sees the overload (~20 ms + checks) the queue grows to the whole pool once, and those ~800 packets wait one pool-drain (13–35 ms): that is the p99.9–p99.99 tail (≈ 0.1–1% of probes, twice per run here because the traffic restarts). A real overload pays it once per episode. Making the onset cheaper would need limiting growth while a queue is behind, which is what stall absorption relies on: left as is, stated.
+- **Recommendation: make `fill_overload_ms=20` the default of fill_dyn** (no cost measured anywhere, the one property rxBisect's design lacks, 20.10).
+
+**64 B (f16): the drops are the NIC's internal buffer, and 128 posted buffers end them.** Every lost packet is in `rx_prio0_buf_discard` (ethtool), monotonic in the buffers posted in a ring of 1,024: 32 → 861 M per 10 s (NDR 0%), 64 → 310 M (58%), dyn-128's ~61 mean → 86–137 M (59%), 96 → ~20 k (71%, unstable), **128 → 0 (100%, 148.8 Mpps)**; dyn-128 with floor 128 → 0 (100%); dynov-128 = dyn-128 (59%, 0 overloads: the NIC drops before any queue falls behind). **But privring-64 (64 posted in a ring of 64) forwards 148.8 Mpps with 0 drops**, so the need is not a count of buffers alone: in a 1,024-entry ring the NIC needs ~100–128 WQEs posted ahead at 18.6 Mpps per queue (~6–7 µs of traffic). Hypothesis: the NIC's WQE prefetch/cache — a 64-entry ring (1 KiB of WQEs) stays cached, a 1,024-entry one does not and freshly written WQEs must be fetched just in time. Test: fill-64-64 (64 posted in a ring of 64). **Fix proposed: a rate-aware floor**, floor = max(32, packets/s × ~7 µs) measured per queue at each clock read: 32 at 1500 B (~1 Mpps per queue: working set and DRAM unchanged), ~130 at 64 B line rate.
+
+**Heavy NF (f17): the cycles advantage becomes throughput once cores saturate.** Every system forwards 98 Gb/s up to 96 reads per packet (privring-1024 loses 0.79% at 96 with payload). At 128 reads:
+
+| delivered Gb/s (loss %) | privring-1024 | privring-128 | shRing | fill-128 | **dyn-128** |
+|---|---|---|---|---|---|
+| payload untouched | 87.89 (10.3) | 97.80 (0.20) | 92.81 (5.3) | 97.73 (0.27) | **97.65 (0.36)** |
+| payload read | 75.88 (22.6) | 92.67 (5.4) | 83.97 (14.3) | 92.24 (5.9) | **92.16 (6.0)** |
+
+- **dyn-128 delivers +11% / +21% over privring-1024 and +5% / +10% over shRing** (untouched / payload); shRing is also the idealised dynamic shRing here (better of privring-1024 and shRing), so +5–10% over dshRing. Same order as rxBisect's reported gains (+20% LB/NAT over dshRing, +18–37% over privRing).
+- dyn-128 ties the small privRing (−0.2 to −0.5%), as the papers' rxBisect does: same small working set; what separates them is burst/stall absorption (f4/f5: dyn 0 lost up to 750 µs, small privRing 0.016–0.078%).
+- Cycles per packet below saturation (payload read): dyn 1,182–2,086, privring-128 1,218–2,134, shRing 1,807–2,335, privring-1024 1,458–2,386 — dyn lowest at every level.
+- Projection (20.8, small-privRing anchor): rxBisect ≈ small privRing in throughput in both of its figures, so rxBisect estimated here ≈ 97.8 / 92.7 Gb/s: **parity with dyn-128**.
+
+**Next (proposed):** (1) default `fill_overload_ms=20`; (2) rate-aware floor + diagnostic fill-64-64, then rerun f16 (64 B) and f1/f5 (1500 B unchanged?); (3) optionally f17 at 104–120 reads to place each system's knee. Nodes up to 2026-10-29.
