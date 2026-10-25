@@ -3,15 +3,15 @@ rxBisect's published numbers, and what they project onto our testbed (CLAUDE.md 
 == Fig. 10 (balanced, full load) against f1: each system / shRing
    memory bandwidth, LB: paper rxBisect/shRing 1.92 (small privRing 0.92)
    memory bandwidth, NAT: paper rxBisect/shRing 1.73 (small privRing 0.93)
-   DRAM write here: dyn-128/shRing 0.61 (privring-128 17.60) — paper's rxBisect is emulated, so its ratio overstates hardware rxBisect
+   DRAM write here: dyn-128/shRing 0.41 (privring-128 17.60) — paper's rxBisect is emulated, so its ratio overstates hardware rxBisect
    occupancy, LB: paper rxBisect 8% shRing 3%; DDIO hit rxBisect 67% shRing 82%
    occupancy, NAT: paper rxBisect 10% shRing 3%; DDIO hit rxBisect 66% shRing 80%
-   DDIO hit: paper rxBisect/shRing 0.82 (LB) 0.82 (NAT), emulated; here dyn-128 99.6% / shRing 99.0% = 1.006
-   cycles per packet: paper (Fig. 18, low load) rxBisect ~0.90 x shRing; here dyn-128 0.41 x shRing (f1, full load, fwd cycles)
+   DDIO hit: paper rxBisect/shRing 0.82 (LB) 0.82 (NAT), emulated; here dyn-128 99.5% / shRing 99.0% = 1.006
+   cycles per packet: paper (Fig. 18, low load) rxBisect ~0.90 x shRing; here dyn-128 0.43 x shRing (f1, full load, fwd cycles)
 
 == Fig. 9 (l3fwd no-drop, 1500 B) against f9, %% of line rate
    multi  paper: rxBisect 97, small 98, shRing 97, privRing 97 | here: dyn 100.0, small 100.0, shRing 100.0, privRing 100.0
-   single paper: rxBisect 82, small 40, shRing 80, privRing 80 | here: dyn 99.7, small 100.0, shRing 100.0, privRing 100.0
+   single paper: rxBisect 82, small 40, shRing 80, privRing 80 | here: dyn 100.0, small 100.0, shRing 100.0, privRing 100.0
    single core: small privRing 40% there and ~100% here — another regime (isolated cores never pause here), so no anchor transfers; compare with stalls (f4/f5)
 
 == Fig. 14 (processing variability) against f6, throughput / its value at x = 0
