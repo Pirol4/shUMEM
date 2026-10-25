@@ -14,6 +14,7 @@
 #   TGEN_HOST=... TGEN_MAC=... harness/run_eval.sh f1 f4 f6 f7
 #   TGEN_HOST=... TGEN_MAC=... harness/run_eval.sh all2    # f1 to f15, priority order
 #   TGEN_HOST=... TGEN_MAC=... harness/run_eval.sh all     # e1 to e8
+#   TGEN_HOST=... TGEN_MAC=... harness/run_eval.sh consol  # f23, then the c batteries (20.20)
 
 set -euo pipefail
 
@@ -21,12 +22,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SWEEPS_DIR="$SCRIPT_DIR/sweeps"
 EXP_DIR="${EXP_DIR:-/mydata/exp}"
 
-[[ $# -gt 0 ]] || { sed -n '3,12p' "$0" >&2; exit 1; }
+[[ $# -gt 0 ]] || { sed -n '3,18p' "$0" >&2; exit 1; }
 if [[ "$1" == all ]]; then
     set -- e1 e2 e3 e4 e5 e6 e7 e8
 elif [[ "$1" == all2 ]]; then
     # The core of the paper comparison first (CLAUDE.md 20.3).
     set -- f1 f4 f6 f7 f9 f3 f10 f8 f11 f12 f13 f5 f2 f14 f15
+elif [[ "$1" == consol ]]; then
+    # The first dyn's batteries again at the final defaults (CLAUDE.md 20.20),
+    # after a drift check; make_batteries.py's CONSOLIDATE order.
+    set -- f23 c1 c4 c6 c7 c5 c17 c2 c3 c9 c10 c8 c11 c12 c13 c15 c14
 fi
 
 failed=()

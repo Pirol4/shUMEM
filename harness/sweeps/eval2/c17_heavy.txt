@@ -1,0 +1,44 @@
+# Consolidation of f17_heavy.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f17_mi128p_dynfin-128_n01                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=32 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi48_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=48 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32p_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=32 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi128_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi80_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=80 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64p_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=64 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96p_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi80p_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=80 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi48p_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=48 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f17_mi48_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=48 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi128_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi128p_dynfin-128_n02                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi80p_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=80 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64p_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=64 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96p_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi48p_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=48 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=32 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32p_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=32 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi80_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=80 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f17_mi80_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=80 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32p_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=32 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi128_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi32_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=32 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96p_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=96 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi48p_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=48 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi48_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=48 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi80p_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=80 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi96_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64p_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=64 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi64_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f17_mi128p_dynfin-128_n03                dyn-128        -  -  rates=98 duration=30 work=128 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

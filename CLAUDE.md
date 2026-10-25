@@ -1967,3 +1967,15 @@ The s5 smoke failed after its warm-up: its 20 s window was shorter than the 60-s
 - **The tail again:** p99.99 330–335 µs against 89–93 for the static small rings — the same saturated-tail limitation as 20.17, now with a real load.
 - **shRing** loses 8.6–8.9% here: with the trace's size mix (~14 Mpps) its Rx path costs 330–480 cycles per packet against 120–190 for the others.
 - **Plain trace load:** a tie on loss and latency; DRAM write: dyn 2 MB/s, shRing 3, fill 18, privring-128 22, privring-1024 2,291 — with a third of the frames small, the working set is lighter for everyone, and dyn's is the lightest.
+
+### 20.20 Consolidation round (planned 2026-10-24 night): every number from the final dyn
+
+Rounds 1–2 (f1–f18) ran the first dyn (no overload policy, no rate floor); only f20–f22 ran the final one (fork `5f3a20100`: overload on an empty poll, 20 ms; rate floor, 12 µs). f19–f20 matched them at 1500 B, but the paper's tables must all come from one version. Decided with the user: rerun **only dyn** in the round-1/2 batteries, at the final defaults; the baselines did not change.
+
+- **Batteries `c<N>`** (`make_batteries.py consolidation()`): the dyn-* lines of `f<N>_*.txt`, copied with the same options, rounds and shuffled order, label system `dynfin-*` (e.g. `f1_bal_dynfin-128_n01`, `f9_single_dynfin-64-16_n02`). For f1–f15 and f17 (f16, f18 were round-2 diagnostics, superseded by f20; f0 is the smoke): 378 runs, ~6.9 h by the round-1 run times.
+- **Drift check `f23`** (16 runs, ~20 min, first): `dynold-128` (dyn-128 with `overload=0 runway=0`, the first dyn) and fill-128 in four round-1 cells — f1 balanced, f4 cold stall, f8 16 reads + payload, f7 40% of 64 B packets — n = 2. Matching round 1 says the baselines of 2026-10-22/23 still compare.
+- **`run_eval.sh consol`** = `f23 c1 c4 c6 c7 c5 c17 c2 c3 c9 c10 c8 c11 c12 c13 c15 c14` (priority order); one CSV per battery (`eval_c<N>.csv`), so with `KEEP_GOING=1` a failed run costs only the rest of its battery, and the same command resumes.
+- **`eval_report.py`:** reads `eval_c*.csv/jsonl` too; in f1–f18 the label's `dynfin-*` is shown as `dyn-*` and the first dyn's `dyn-*` as `dynold-*` (same meaning as in f19–f20), so `dyn-*` is the final system in every table and figure, and `rxbisect_reference.py` follows.
+- Mock end to end (f4 + f23 + c4 + c9 shortened): batteries, alias, knobs (`overload=0 runway=0` only on dynold) and the renaming in the report all as intended.
+- **Runbook:** tgen — `sudo git -C /local/repository pull`, TRex still up in tmux `trex`. dut — `sudo git -C /local/repository pull`, then in tmux `cd /local/repository && KEEP_GOING=1 TGEN_HOST=sm110p-10s10607.wisc.cloudlab.us TGEN_MAC=b8:3f:d2:13:08:9e harness/run_eval.sh consol` (~7.2 h). No fork change.
+- **Watch for** (dyn's behaviour can change where the policy acts): f9 single-core NDR (one queue near its capacity may rarely poll empty → overload → floor ~98 at 8.2 Mpps); f6 slow target (p99 ~1 ms as f20, not 13–35 ms); f17 at saturation (f20's tail: p99.99 554–970 µs); f10 64 B (100% as f20).

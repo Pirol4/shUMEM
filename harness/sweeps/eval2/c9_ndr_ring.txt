@@ -1,0 +1,26 @@
+# Consolidation of f9_ndr_ring.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f9_single_dynfin-128_n01                 dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-64-16_n01                dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-64-16_n01               dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-32-8_n01                 dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-32-8_n01                dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-128_n01                  dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+f9_single_dynfin-64-16_n02               dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-32-8_n02                 dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-32-8_n02                dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-128_n02                 dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-64-16_n02                dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-128_n02                  dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+f9_single_dynfin-128_n03                 dyn-128        -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-64-16_n03               dyn-64-16      -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-64-16_n03                dyn-64-16      -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-128_n03                  dyn-128        -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_multi_dynfin-32-8_n03                 dyn-32-8       -  -  duration=10 --search 50,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f9_single_dynfin-32-8_n03                dyn-32-8       -  -  duration=10 --queue-weights 1,0,0,0,0,0,0,0 --search 10,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required

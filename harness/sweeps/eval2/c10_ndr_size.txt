@@ -1,0 +1,23 @@
+# Consolidation of f10_ndr_size.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f10_sz64_dynfin-128_n01                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz512_dynfin-128_n01                 dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz128_dynfin-128_n01                 dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz1024_dynfin-128_n01                dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz256_dynfin-128_n01                 dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+f10_sz64_dynfin-128_n02                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz256_dynfin-128_n02                 dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz512_dynfin-128_n02                 dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz128_dynfin-128_n02                 dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz1024_dynfin-128_n02                dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+f10_sz1024_dynfin-128_n03                dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz256_dynfin-128_n03                 dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz128_dynfin-128_n03                 dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz512_dynfin-128_n03                 dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+f10_sz64_dynfin-128_n03                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required

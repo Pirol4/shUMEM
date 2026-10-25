@@ -1,0 +1,25 @@
+# Consolidation of f1_balanced.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f1_bal_dynfin-128_n01                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f1_bal_dynfin-128_n02                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f1_bal_dynfin-128_n03                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f1_bal_dynfin-128_n04                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f1_bal_dynfin-128_n05                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 6
+f1_bal_dynfin-128_n06                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 7
+f1_bal_dynfin-128_n07                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 8
+f1_bal_dynfin-128_n08                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 9
+f1_bal_dynfin-128_n09                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 10
+f1_bal_dynfin-128_n10                    dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

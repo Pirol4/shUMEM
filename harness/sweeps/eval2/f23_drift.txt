@@ -1,0 +1,26 @@
+# Drift check before the consolidation (~20 min, n = 2): the first dyn
+# (dynold-128 = overload and rate floor off) and fill-128 in four cells of
+# rounds 1-2 (f1 balanced, f4 cold stall, f8 16 reads + payload, f7 40% of
+# 64 B packets). Matching their round-1 numbers says the node has not
+# drifted, so the final dyn of the c batteries compares with round 1's
+# baselines.
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f23_tv40_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=2 --queue-weights 1.0,1.0,1.0,4.666667,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_bal_fill-128_n01                     fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_cold_dynold-128_n01                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_mi16p_dynold-128_n01                 dyn-128        -  -  rates=98 duration=30 work=16 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_bal_dynold-128_n01                   dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_cold_fill-128_n01                    fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_tv40_dynold-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 --queue-weights 1.0,1.0,1.0,4.666667,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_mi16p_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=16 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f23_cold_fill-128_n02                    fill-128       -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_bal_fill-128_n02                     fill-128       -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_bal_dynold-128_n02                   dyn-128        -  -  rates=98 duration=60 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_cold_dynold-128_n02                  dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_mi16p_dynold-128_n02                 dyn-128        -  -  rates=98 duration=30 work=16 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0
+f23_tv40_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=2 --queue-weights 1.0,1.0,1.0,4.666667,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_mi16p_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=16 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f23_tv40_dynold-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 --queue-weights 1.0,1.0,1.0,4.666667,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required overload=0 runway=0

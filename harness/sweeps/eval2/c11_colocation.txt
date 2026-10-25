@@ -1,0 +1,35 @@
+# Consolidation of f11_colocation.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f11_hog0_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 hog=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog1_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 hog=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog2_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 hog=2 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog7_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 hog=7 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog4_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 hog=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f11_hog2_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 hog=2 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog4_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 hog=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog1_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 hog=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog7_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 hog=7 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog0_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 hog=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f11_hog0_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 hog=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog4_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 hog=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog1_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 hog=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog7_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 hog=7 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog2_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 hog=2 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f11_hog0_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 hog=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog7_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 hog=7 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog4_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 hog=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog2_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 hog=2 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog1_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 hog=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f11_hog1_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 hog=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog2_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 hog=2 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog4_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 hog=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog0_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 hog=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f11_hog7_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 hog=7 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

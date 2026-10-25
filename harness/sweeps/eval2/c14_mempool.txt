@@ -1,0 +1,26 @@
+# Consolidation of f14_mempool.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f14_c32r1_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32s1_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0s4_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32s4_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32r4_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0r4_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f14_c32s1_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32r1_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0s4_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32r4_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0r4_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32s4_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f14_c32r1_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32r4_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0s4_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32s1_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c0r4_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f14_c32s4_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=4 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

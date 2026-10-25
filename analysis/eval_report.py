@@ -46,11 +46,18 @@ SPECIAL_QUEUE = {
     "f18": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
     "f19": {"pv": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
     "f20": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
+    "f23": {"cold": 3, "tv": 3},
 }
+# Rounds 1-2 (f1-f18) ran the first dyn; the consolidation (CLAUDE.md 20.20)
+# reran their dyn runs at the final defaults, labelled dynfin-*. Shown as
+# dyn-* and the first dyn as dynold-* (= overload and rate floor off, as in
+# f19-f20), so dyn-* is the same system in every table.
+FIRST_DYN_BATTERIES = {"f%d" % i for i in range(1, 19)}
 SYSTEM_ORDER = ["privring-1024", "privring-512", "privring-256", "privring-128", "privring-64",
                 "shring-8", "shringfix-8", "fill-32", "fill-64", "fill-96", "fill-128",
                 "dyn-32-8", "dyn-64-16", "dyn-128", "dyn-128-64", "dyn-128-96", "dyn-128-128",
-                "dynov-128", "dynold-128", "fill-64-64"]
+                "dynov-128", "dynold-128", "dynold-32-8", "dynold-64-16", "dynold-128-64",
+                "dynold-128-96", "dynold-128-128", "fill-64-64"]
 STYLE = {   # as analysis/sweep_report.py, so a system keeps its color
     "privring-1024": ("#2a78d6", "o"), "privring-128": ("#eb6834", "s"),
     "shring-8": ("#1baf7a", "D"), "fill-128": ("#eda100", "^"),
@@ -74,9 +81,17 @@ def number(text):
         return None
 
 
+def system_name(battery, system):
+    if system.startswith("dynfin-"):
+        return "dyn-" + system[len("dynfin-"):]
+    if battery in FIRST_DYN_BATTERIES and system.startswith("dyn-"):
+        return "dynold-" + system[len("dyn-"):]
+    return system
+
+
 def read_csv_rows(root):
     rows = []
-    for path in find(root, "eval_f*.csv"):
+    for path in find(root, "eval_f*.csv") + find(root, "eval_c*.csv"):
         with open(path, newline="") as f:
             rows += list(csv.DictReader(f))
     return rows
@@ -85,7 +100,7 @@ def read_csv_rows(root):
 def read_details(root):
     """label -> phase -> list of detail records, in file order."""
     details = collections.defaultdict(lambda: collections.defaultdict(list))
-    for path in find(root, "eval_f*.jsonl"):
+    for path in find(root, "eval_f*.jsonl") + find(root, "eval_c*.jsonl"):
         with open(path) as f:
             for line in f:
                 rec = json.loads(line)
@@ -231,7 +246,8 @@ def windows(rows, details, summaries, ddio):
         m = LABEL.match(row["label"])
         if not m or row["phase"] == "warmup":
             continue
-        battery, name, system, rep = m.group(1), m.group(2), m.group(3), int(m.group(4))
+        battery, name, rep = m.group(1), m.group(2), int(m.group(4))
+        system = system_name(battery, m.group(3))
         summary = summaries.get(row["label"], {})
         if row["phase"] == "search":
             if row["label"] in ndr_seen:
@@ -624,7 +640,7 @@ def figures(table, records, out):
                                    ("pooled_special_p99.99", "special queue p99.99 (us)", True),
                                    ("pooled_bystander_p99.99", "bystanders p99.99 (us)", False),
                                    ("dram_write", "DRAM write (MB/s)", True)],
-               out, "Overload policy: dyn-128, dyn-128 + fill_overload_ms=50, fill-128")
+               out, "Overload policy (round 2): first dyn, + fill_overload_ms=20, fill-128")
     timeseries(plt, records, "f18", out, "Overload policy: load turns pathological at 20 s")
     bar_panels(plt, table, "f22", [("gbps", "delivered Gb/s", False),
                                    ("loss_pct", "loss (%)", True),

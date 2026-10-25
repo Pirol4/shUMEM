@@ -1,0 +1,45 @@
+# Consolidation of f5_stall_len.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f5_len250_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 stall=4:250:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len750_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 stall=4:750:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1000_dynfin-128_n01                dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1500_dynfin-128_n01                dyn-128        -  -  rates=98 duration=30 stall=4:1500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len500_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 stall=4:500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len100_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 stall=4:100:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len2000_dynfin-128_n01                dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f5_len1000_dynfin-128_n02                dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len250_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 stall=4:250:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len100_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 stall=4:100:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len500_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 stall=4:500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len750_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 stall=4:750:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len2000_dynfin-128_n02                dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1500_dynfin-128_n02                dyn-128        -  -  rates=98 duration=30 stall=4:1500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f5_len500_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 stall=4:500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len750_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 stall=4:750:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1000_dynfin-128_n03                dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len250_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 stall=4:250:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len2000_dynfin-128_n03                dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1500_dynfin-128_n03                dyn-128        -  -  rates=98 duration=30 stall=4:1500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len100_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 stall=4:100:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f5_len1500_dynfin-128_n04                dyn-128        -  -  rates=98 duration=30 stall=4:1500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len2000_dynfin-128_n04                dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len250_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 stall=4:250:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len750_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 stall=4:750:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len100_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 stall=4:100:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1000_dynfin-128_n04                dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len500_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 stall=4:500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f5_len250_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 stall=4:250:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len100_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 stall=4:100:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1000_dynfin-128_n05                dyn-128        -  -  rates=98 duration=30 stall=4:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len500_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 stall=4:500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len1500_dynfin-128_n05                dyn-128        -  -  rates=98 duration=30 stall=4:1500:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len750_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 stall=4:750:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f5_len2000_dynfin-128_n05                dyn-128        -  -  rates=98 duration=30 stall=4:2000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

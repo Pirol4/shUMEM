@@ -1,0 +1,14 @@
+# Consolidation of f15_hot.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f15_hot_dynfin-128_n01                   dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f15_hotmv_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=60 --hot-share 0.5 --hot-move 5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f15_hotmv_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=60 --hot-share 0.5 --hot-move 5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f15_hot_dynfin-128_n02                   dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f15_hotmv_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=60 --hot-share 0.5 --hot-move 5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f15_hot_dynfin-128_n03                   dyn-128        -  -  rates=98 duration=30 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

@@ -1,0 +1,65 @@
+# Consolidation of f6_proc_var.txt (CLAUDE.md 20.20): its dyn runs again at the final
+# defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same
+# options, rounds and order; labels dynfin-* (shown as dyn-*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+f6_pv200_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv0_dynfin-128_n01                    dyn-128        -  -  rates=98 duration=30 work=2 target=4:0 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv6400_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv400_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv100_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:100 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv50_dynfin-128_n01                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:50 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv4800_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv3200_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:3200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv800_dynfin-128_n01                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv1600_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv2400_dynfin-128_n01                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+f6_pv800_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv6400_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv4800_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv100_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:100 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv200_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv1600_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv50_dynfin-128_n02                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:50 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv400_dynfin-128_n02                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv2400_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv0_dynfin-128_n02                    dyn-128        -  -  rates=98 duration=30 work=2 target=4:0 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv3200_dynfin-128_n02                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:3200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+f6_pv4800_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv1600_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv800_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv400_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv50_dynfin-128_n03                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:50 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv6400_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv3200_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:3200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv100_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:100 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv200_dynfin-128_n03                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv0_dynfin-128_n03                    dyn-128        -  -  rates=98 duration=30 work=2 target=4:0 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv2400_dynfin-128_n03                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+f6_pv800_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv400_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv200_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv50_dynfin-128_n04                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:50 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv0_dynfin-128_n04                    dyn-128        -  -  rates=98 duration=30 work=2 target=4:0 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv6400_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv100_dynfin-128_n04                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:100 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv1600_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv3200_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:3200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv2400_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv4800_dynfin-128_n04                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+f6_pv0_dynfin-128_n05                    dyn-128        -  -  rates=98 duration=30 work=2 target=4:0 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv2400_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv1600_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv6400_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:6400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv400_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv4800_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv50_dynfin-128_n05                   dyn-128        -  -  rates=98 duration=30 work=2 target=4:50 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv200_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv100_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:100 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv3200_dynfin-128_n05                 dyn-128        -  -  rates=98 duration=30 work=2 target=4:3200 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+f6_pv800_dynfin-128_n05                  dyn-128        -  -  rates=98 duration=30 work=2 target=4:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

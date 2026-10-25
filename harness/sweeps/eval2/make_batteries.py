@@ -13,6 +13,7 @@ latency stream of 10 kpps on every Rx queue with TRex's 1 us HDR histogram.
 
 Usage: python3 harness/sweeps/eval2/make_batteries.py   (rewrites f*.txt here)
 """
+import glob
 import os
 import random
 
@@ -602,10 +603,74 @@ def f22():
     ], rounds("f22", cells, 3))
 
 
+# --- Consolidation (CLAUDE.md 20.20): every number from the final dyn ------------------
+
+# Rounds 1-2 ran the first dyn (no overload policy, no rate floor). Their dyn
+# runs are repeated at the final defaults (fork 5f3a20100) with the same
+# options, rounds and order, as battery c<N> for f<N>; the label's system is
+# dynfin-*, which eval_report.py shows as dyn-* (and the first dyn as
+# dynold-*). The baselines did not change and are not rerun. Priority order,
+# as run by run_eval.sh consol after f23.
+CONSOLIDATE = ["f1", "f4", "f6", "f7", "f5", "f17", "f2", "f3", "f9", "f10", "f8",
+               "f11", "f12", "f13", "f15", "f14"]
+
+
+def f23():
+    tests = [("bal", "rates=98 duration=60"),
+             ("cold", "rates=98 duration=30 stall=4:1000:100"),
+             ("mi16p", "rates=98 duration=30 work=16 payload=1"),
+             ("tv40", "rates=98 duration=30 work=2 --queue-weights %s --queue-sizes %s"
+              % (weights(7 * 0.40 / (1 - 0.40)), sizes(60)))]
+    systems = [("dynold-128", "dyn-128", OLD), ("fill-128", "fill-128", "")]
+    cells = [(test, name, system, "%s %s %s %s" % (opts, WARM, LAT, extra))
+             for test, opts in tests for name, system, extra in systems]
+    body = []
+    for k in range(1, 3):
+        order = list(cells)
+        random.Random("f23-%d" % k).shuffle(order)
+        body.append("# round %d" % k)
+        body += [line("f23_%s_%s_n%02d" % (test, name, k), system, opts.strip())
+                 for test, name, system, opts in order]
+    write("f23_drift.txt", [
+        "Drift check before the consolidation (~20 min, n = 2): the first dyn",
+        "(dynold-128 = overload and rate floor off) and fill-128 in four cells of",
+        "rounds 1-2 (f1 balanced, f4 cold stall, f8 16 reads + payload, f7 40% of",
+        "64 B packets). Matching their round-1 numbers says the node has not",
+        "drifted, so the final dyn of the c batteries compares with round 1's",
+        "baselines.",
+    ], body)
+
+
+def consolidation():
+    for battery in CONSOLIDATE:
+        path, = glob.glob(os.path.join(HERE, "%s_*.txt" % battery))
+        source = os.path.basename(path)
+        body, round_line = [], None
+        with open(path) as f:
+            for text in f:
+                if text.startswith("# round"):
+                    round_line = text.strip()
+                if text.startswith("#") or not text.strip():
+                    continue
+                label, system, _, _, options = text.split(None, 4)
+                if not system.startswith("dyn-"):
+                    continue
+                if round_line:
+                    body.append(round_line)
+                    round_line = None
+                body.append(line(label.replace("_dyn-", "_dynfin-", 1), system, options.strip()))
+        write("c%s_%s" % (battery[1:], source.split("_", 1)[1]), [
+            "Consolidation of %s (CLAUDE.md 20.20): its dyn runs again at the final" % source,
+            "defaults (overload on an empty poll, 20 ms; rate floor, 12 us), same",
+            "options, rounds and order; labels dynfin-* (shown as dyn-*).",
+        ], body)
+
+
 def main():
     for battery in (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15,
-                    s1, s2, f16, f17, f18, s3, f19, s4, f20, f21, s5, f22):
+                    s1, s2, f16, f17, f18, s3, f19, s4, f20, f21, s5, f22, f23):
         battery()
+    consolidation()
 
 
 if __name__ == "__main__":
