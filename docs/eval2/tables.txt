@@ -687,5 +687,28 @@ x          system           n    Gbps     loss%     NDR%     avg     p99  p99.99
 100.0      fill-128         3   99.98    0.0194        -   298.8     975      996        -      996   0.0183    2015    154    1.3
 100.0      dyn-128          3   99.98    0.0191        -   298.8     976      990        -      990   0.0184    1279    162    1.2
 
+== f22
+x          system           n    Gbps     loss%     NDR%     avg     p99  p99.99*    spec*    byst*   bystL%  DRAMwr  rxcyc    occ
+trace      privring-1024    3   98.00    0.0000        -    25.3      36       43        -       43   0.0000    2291    309    0.2
+trace      privring-128     3   98.00    0.0000        -    25.3      36       43        -       43   0.0000      22    294    0.2
+trace      shringfix-8      3   98.00    0.0000        -    26.2      37       45        -       45   0.0000       3    971    1.3
+trace      fill-128         3   98.00    0.0000        -    25.1      36       43        -       43   0.0000      18    288    0.2
+trace      dyn-128          3   98.00    0.0000        -    25.2      36       43        -       43   0.0000       2    287    0.2
+trace32p   privring-1024    3   97.99    0.0180        -    27.0      39      414        -      414   0.0108   10038    197    3.9
+trace32p   privring-128     3   98.00    0.0000        -    26.4      37       48        -       48   0.0000    1507    188    1.3
+trace32p   shringfix-8      3   97.97    0.0284        -    28.6      40       94        -       94   0.0305    1533    477    4.2
+trace32p   fill-128         3   98.00    0.0000        -    26.4      37       48        -       48   0.0000    1631    184    1.3
+trace32p   dyn-128          3   98.00    0.0000        -    26.4      37       48        -       48   0.0000    1154    184    1.3
+trace32pho privring-1024    3   94.66    4.0647        -   227.1     586      611        -      611   3.1406   30488    148  254.7
+trace32pho privring-128     3   97.75    0.3558        -    28.5      79       92        -       92   0.2325   23437    130   10.8
+trace32pho shringfix-8      3   89.47    8.8604        -    39.2     108      124        -      124   8.7011   23404    351   23.8
+trace32pho fill-128         3   97.73    0.3820        -    28.8      80       93        -       93   0.2499   23556    126   11.9
+trace32pho dyn-128          3   97.77    0.3240        -    28.3      40      330        -      330   0.2150   23138    129    5.3
+trace48p   privring-1024    3   93.51    5.3755        -   253.8     606      628        -      628   4.2515   10939    124  328.6
+trace48p   privring-128     3   97.76    0.3374        -    28.1      79       89        -       89   0.2256    2089    124   10.2
+trace48p   shringfix-8      3   89.67    8.5936        -    38.8     107      122        -      122   8.5017    1873    329   23.5
+trace48p   fill-128         3   97.73    0.3738        -    28.5      80       90        -       90   0.2507    2288    119   11.4
+trace48p   dyn-128          3   97.81    0.2660        -    27.6      39      335        -      335   0.1720    1530    124    4.7
+
 * pooled over every run's HDR histogram; spec = stalled/target queue, byst = the other queues; bystL% = loss of the bystanders' latency probes
 wrote /tmp/claude-0/-root/0e114361-deff-45e3-a87e-13f877f37e8d/scratchpad/all/runs.csv, cells.csv and figures

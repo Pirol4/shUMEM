@@ -1949,3 +1949,21 @@ The user chose to skip CAIDA for now (access is restricted: request + Acceptable
 - **What it keeps and what it does not (state it):** the trace's per-queue imbalance second by second and its frame-size mix; not its sub-second bursts or the exact packet sequence; IPv4 only; rates scaled to 98% of 100 Gb/s (~35×).
 - **Batteries:** `s5` smoke (2 runs, ~3 min). `f22` (60 runs, ~2 h, n = 3): 5 systems × {plain l3fwd; 32 reads + payload; 48 reads + payload (near saturation at ~1.7 Mpps per core); 32 reads + payload + 4 STREAM workers (rxBisect's co-location)}, 60 s each with `--timeseries`.
 - **Runbook:** tgen — `sudo git -C /local/repository pull`, `sudo mkdir -p /mydata/trace && sudo chown $USER /mydata/trace`, `/local/repository/harness/trace/fetch_mawi.sh` (minutes, depends on the download). dut — `sudo git -C /local/repository pull`, then in tmux `KEEP_GOING=1 TGEN_HOST=sm110p-10s10607.wisc.cloudlab.us TGEN_MAC=b8:3f:d2:13:08:9e harness/run_eval.sh s5 f22` (~2 h). No fork change.
+
+### 20.19 Round 5 results: the MAWI trace (f22; 60 runs, complete)
+
+The s5 smoke failed after its warm-up: its 20 s window was shorter than the 60-step trace, and a step due as TRex stopped the traffic hit `update_streams` on an idle port. Fixed (`rate_sweep.py`, no step within 0.2 s of the window's end). The warm-up already showed the replay working on the real TRex: 14.1 Mpps, 97.9 Gb/s, mean frame 844 B (the 60 s JSON), 0 loss. f22 (60 s windows, 60 steps) was not affected: every run applied 60 steps, the last at ~59.02 s; per-queue offered share over the 60 s 9.8–14.2% (max/min 1.44; per second ~1.8–2).
+
+| f22, n = 3 | privring-1024 | privring-128 | shRing | fill-128 | **dyn-128** |
+|---|---|---|---|---|---|
+| plain: Gb/s / loss / p99 (µs) / DRAM write (MB/s) | 98.0 / 0 / 36 / 2,291 | 98.0 / 0 / 36 / 22 | 98.0 / 0 / 37 / 3 | 98.0 / 0 / 36 / 18 | **98.0 / 0 / 36 / 2** |
+| 32 reads + payload: loss / p99.99 (µs) / DRAM | 0.018% / 414 / 10,038 | 0 / 48 / 1,507 | 0.028% / 94 / 1,533 | 0 / 48 / 1,631 | **0 / 48 / 1,154** |
+| 48 reads + payload: Gb/s / loss | 93.5 / 5.38% | 97.76 / 0.34% | 89.7 / 8.59% | 97.73 / 0.37% | **97.81 / 0.27%** |
+| … mean / p99 / p99.9 / p99.99 (µs) | 254 / 606 / 620 / 628 | 28 / 79 / 83 / 89 | 39 / 107 / 116 / 122 | 29 / 80 / 84 / 90 | **28 / 39 / 47 / 335** |
+| 32 reads + payload + 4 STREAM: Gb/s / loss | 94.7 / 4.06% | 97.75 / 0.36% | 89.5 / 8.86% | 97.73 / 0.38% | **97.77 / 0.32%** |
+| … mean / p99 / p99.9 / p99.99 (µs) | 227 / 586 / 601 / 611 | 29 / 79 / 85 / 92 | 39 / 108 / 117 / 124 | 29 / 80 / 85 / 93 | **28 / 40 / 50 / 330** |
+
+- **Under a real trace's load, near saturation, dyn-128 has the highest throughput, the lowest loss and the lowest latency up to p99.9** (p99 39–40 µs against 79–80 for the static small rings, 107–108 for shRing, 586–606 for privring-1024): the overload policy keeps the busiest queues short (occupancy 4.7–5.3 against 10–12). Over the idealised dynamic shRing (better of privring-1024 and shRing): +3.3% / +4.6% Gb/s; over shRing alone +9%. Against the small privRing — rxBisect's throughput proxy — +0.05 Gb/s, with less loss: parity.
+- **The tail again:** p99.99 330–335 µs against 89–93 for the static small rings — the same saturated-tail limitation as 20.17, now with a real load.
+- **shRing** loses 8.6–8.9% here: with the trace's size mix (~14 Mpps) its Rx path costs 330–480 cycles per packet against 120–190 for the others.
+- **Plain trace load:** a tie on loss and latency; DRAM write: dyn 2 MB/s, shRing 3, fill 18, privring-128 22, privring-1024 2,291 — with a third of the frames small, the working set is lighter for everyone, and dyn's is the lightest.
