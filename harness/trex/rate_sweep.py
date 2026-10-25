@@ -45,6 +45,7 @@ LATENCY_PG_ID = 1          # the profile's single legacy latency stream
 LATENCY_PG_BASE = 10       # the profile's per-queue latency streams: 10 + queue
 RX_DRAIN_SECONDS = 1.0     # let in-flight packets come back before reading counters
 SAMPLE_SECONDS = 1.0       # --timeseries and --schedule tick
+SCHEDULE_GUARD_S = 0.2     # no schedule step this close to the window's end
 
 # Loss is counted from unicast frames only. The CloudLab switch injects STP and
 # LLDP multicast into the link (CLAUDE.md 17.3) and ipackets counts it, which
@@ -225,7 +226,9 @@ class Window:
         pending, mark, next_sample = list(steps), 0.0, SAMPLE_SECONDS
         while True:
             now = time.time() - start
-            while pending and pending[0][0] <= now:
+            # TRex stops the traffic at `seconds`; a step due then has no
+            # running stream to update ("port(s) are not active").
+            while pending and pending[0][0] <= now and now < seconds - SCHEDULE_GUARD_S:
                 _, upcoming = pending.pop(0)
                 self.account(mark, now, weights)
                 weights, mark = upcoming, now
@@ -237,7 +240,7 @@ class Window:
             if now >= seconds:
                 break
             wake = min([seconds] + ([next_sample] if timeseries else [])
-                       + [t for t, _ in pending[:1]])
+                       + [t for t, _ in pending[:1] if t < seconds - SCHEDULE_GUARD_S])
             time.sleep(max(0.001, wake - now))
         self.account(mark, seconds, weights)
 
