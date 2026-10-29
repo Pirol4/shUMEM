@@ -28,7 +28,8 @@ CSV="$EXP_DIR/pcm-pcie_$LABEL.csv"
 [[ -e "$CSV" ]] && die "$CSV exists; move it away or pick another label"
 
 echo "pcm-pcie: recording to $CSV — start the traffic in ~10 s, Ctrl-C when it ends"
-# 1 s samples, extended events (-e). Pinned to core 0,
-# which run_l3fwd.sh leaves to the OS, so PCM never preempts a polling lcore.
+# 1 s samples, extended events (-e). Pinned to the first
+# housekeeping CPU (SHUMEM_HK_CPU from run_l3fwd.sh, setup/topology.py; CPU 0
+# with one port), so PCM never preempts a polling lcore.
 # exec: the caller's PID is PCM itself, so a signal to it reaches PCM.
-exec taskset -c 0 "$PCM_PCIE" -e -csv="$CSV" 1 >/dev/null
+exec taskset -c "${SHUMEM_HK_CPU:-0}" "$PCM_PCIE" -e -csv="$CSV" 1 >/dev/null

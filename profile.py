@@ -1,11 +1,16 @@
-"""CloudLab profile: two-node back-to-back 100 GbE testbed for DPDK receive-path research.
+"""CloudLab profile: two-node 100 GbE testbed for DPDK receive-path research.
 
 Topology:
 
-    +--------------------+   100 GbE (back-to-back)   +--------------------+
-    |        dut         |<-------------------------->|        tgen        |
-    |  system under test |                            | traffic generator |
-    +--------------------+                            +--------------------+
+    +--------------------+   100 GbE, experiment-link    +--------------------+
+    |        dut         |<----------------------------->|        tgen        |
+    |  system under test |   100 GbE, experiment-link-2  | traffic generator |
+    |                    |<- - - - - - (optional) - - - >|                    |
+    +--------------------+                               +--------------------+
+
+With "Experiment links" at 2 the second port of each node's ConnectX-6 Dx is
+wired too: 2 x 100 Gb/s, the 200 Gb/s of the rxBisect paper's two NICs
+(CLAUDE.md 21). Only node types whose two ports are both for experiments.
 
 Primary node type: sm110p (CloudLab Wisconsin) -- single-socket Intel Xeon
 Silver 4314 (Ice Lake), 16 cores, ~24 MB LLC, single NUMA domain, dual-port
@@ -44,6 +49,11 @@ SUPPORTED_NODE_TYPES = {
         "Primary. Xeon Silver 4314 (Ice Lake), 1 socket / 16 cores, ~24 MB "
         "LLC, single NUMA, ConnectX-6 DX 100 Gb.",
     ),
+    "sm220u": NodeType(
+        WISCONSIN_CM,
+        "200 Gb/s runs. 2 x Xeon Silver 4314 (Ice Lake), 2 sockets / 32 "
+        "cores, ConnectX-6 DX 2 x 100 Gb, both ports for experiments.",
+    ),
     "r650": NodeType(
         CLEMSON_CM,
         "Fallback. Xeon Platinum 8360Y (Ice Lake), 2 sockets / 72 cores, "
@@ -53,6 +63,10 @@ SUPPORTED_NODE_TYPES = {
 }
 
 DEFAULT_NODE_TYPE = "sm110p"
+
+# Node types whose second ConnectX-6 Dx port is also on the experiment network
+# (docs.cloudlab.us/hardware.html: "both ports available for experiment use").
+TWO_PORT_NODE_TYPES = ("sm110p", "sm220u")
 
 # Ubuntu 20.04 was tried first, to match the era of DPDK 21.05 (which shRing
 # pins). CloudLab rejects it: UBUNTU20-64-STD "does not run on this hardware
@@ -77,6 +91,15 @@ NODE_SETUP_COMMAND = "sudo /local/repository/setup/node-setup.sh"
 DATA_PLANE_NETMASK = "255.255.255.0"
 DATA_PLANE_IPS = {"dut": "10.10.1.1", "tgen": "10.10.1.2"}
 
+# The harness finds experiment port p by its address in 10.10.<p+1>.0/24
+# (setup/topology.py). CloudLab gives link 1 10.10.1.x on its own; with two
+# links both are set explicitly, so the numbering never depends on the order
+# CloudLab assigns subnets in.
+LINK_IPS = (
+    {"dut": "10.10.1.1", "tgen": "10.10.1.2"},
+    {"dut": "10.10.2.1", "tgen": "10.10.2.2"},
+)
+
 
 def bind_parameters():
     """Declare the instantiation-form knobs and return (context, bound params)."""
@@ -93,6 +116,18 @@ def bind_parameters():
         ],
         longDescription=(
             "Both nodes use this type and are bound to the cluster that owns it."
+        ),
+    )
+    context.defineParameter(
+        "experimentLinks",
+        "Experiment links (100 GbE each)",
+        portal.ParameterType.INTEGER,
+        1,
+        legalValues=[(1, "1 -- one port per node, 100 Gb/s"),
+                     (2, "2 -- both ports, 2 x 100 Gb/s (sm110p, sm220u)")],
+        longDescription=(
+            "2 wires the second port of each node's ConnectX-6 Dx on a second "
+            "link (10.10.2.0/24), for 200 Gb/s runs (CLAUDE.md 21)."
         ),
     )
     context.defineParameter(
@@ -131,12 +166,19 @@ def bind_parameters():
     # legalValues already rejects an unknown hardwareType; verifyParameters
     # turns any accumulated error into a form-level message.
     params = context.bindParameters()
+    if params.experimentLinks == 2 and params.hardwareType not in TWO_PORT_NODE_TYPES:
+        context.reportError(portal.ParameterError(
+            "%s has one experiment port; 2 links need one of %s"
+            % (params.hardwareType, ", ".join(TWO_PORT_NODE_TYPES)),
+            ["experimentLinks", "hardwareType"]))
     context.verifyParameters()
     return context, params
 
 
 def build_node(request, params, name):
-    """Create one bare-metal node: experiment NIC, scratch space, boot-time setup."""
+    """Create one bare-metal node: experiment NICs, scratch space, boot-time setup.
+
+    Returns its experiment interfaces, one per link."""
     node_type = SUPPORTED_NODE_TYPES[params.hardwareType]
 
     node = request.RawPC(name)
@@ -149,17 +191,22 @@ def build_node(request, params, name):
 
     node.addService(pg.Execute(shell="sh", command=NODE_SETUP_COMMAND))
 
-    interface = node.addInterface("experiment-nic")
-    if params.dataPlaneIp:
-        interface.addAddress(
-            pg.IPv4Address(DATA_PLANE_IPS[name], DATA_PLANE_NETMASK)
-        )
-    return interface
+    interfaces = []
+    for link in range(params.experimentLinks):
+        interface = node.addInterface("experiment-nic" + ("" if link == 0 else "-%d" % (link + 1)))
+        if params.experimentLinks > 1:
+            interface.addAddress(pg.IPv4Address(LINK_IPS[link][name], DATA_PLANE_NETMASK))
+        elif params.dataPlaneIp:
+            interface.addAddress(
+                pg.IPv4Address(DATA_PLANE_IPS[name], DATA_PLANE_NETMASK)
+            )
+        interfaces.append(interface)
+    return interfaces
 
 
-def build_experiment_link(request, interfaces):
+def build_experiment_link(request, interfaces, name="experiment-link"):
     """Wire the nodes with an unshaped, native-rate point-to-point link."""
-    link = request.Link("experiment-link")
+    link = request.Link(name)
     for interface in interfaces:
         link.addInterface(interface)
 
@@ -177,10 +224,11 @@ def main():
     context, params = bind_parameters()
     request = context.makeRequestRSpec()
 
-    interfaces = [
-        build_node(request, params, name) for name in EXPERIMENT_NODES
-    ]
-    build_experiment_link(request, interfaces)
+    per_node = [build_node(request, params, name) for name in EXPERIMENT_NODES]
+    for link in range(params.experimentLinks):
+        build_experiment_link(
+            request, [interfaces[link] for interfaces in per_node],
+            "experiment-link" + ("" if link == 0 else "-%d" % (link + 1)))
 
     context.printRequestRSpec(request)
 

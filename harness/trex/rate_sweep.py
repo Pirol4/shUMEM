@@ -20,6 +20,11 @@ Examples:
         --queue-weights 0.2,0.8,0.8,0.8,0.8,0.8,0.8,0.8 --queue-sizes 60,1500,1500,1500,1500,1500,1500,1500
       per-queue streams: queue 0 gets 3.5% of the packets, as 64 B frames
 
+  ./rate_sweep.py --label dyn-128 --rates 98 --duration 60 --ports 0,1 --queues 8
+      both TRex ports, the same profile on each (to 198.18.<port>.1), each at
+      98% of its own 100 Gb/s: 196 Gb/s in all (CLAUDE.md 21). --queues must
+      be the dut's queues per port. Counters, latency and loss are over both.
+
 Besides one CSV row per window (--out), every window appends JSON lines to
 --details (default: --out with .jsonl): the latency of every latency stream
 (percentiles and the encoded HDR histogram), the estimated packets offered to
@@ -40,9 +45,10 @@ from trex.stl.api import STLClient, STLProfile  # noqa: E402
 import schedule as schedule_mod  # noqa: E402
 import trex_latency  # noqa: E402
 
-TX_PORT = 0
 LATENCY_PG_ID = 1          # the profile's single legacy latency stream
 LATENCY_PG_BASE = 10       # the profile's per-queue latency streams: 10 + queue
+PORT_PG_STRIDE = 32        # port p's pg_ids are 32 * p higher (udp_multiflow.py)
+LINE_GBPS = 100.0          # per port
 RX_DRAIN_SECONDS = 1.0     # let in-flight packets come back before reading counters
 SAMPLE_SECONDS = 1.0       # --timeseries and --schedule tick
 SCHEDULE_GUARD_S = 0.2     # no schedule step this close to the window's end
@@ -62,7 +68,7 @@ CSV_FIELDS = [
     "lat_p50_us", "lat_p90_us", "lat_p99_us", "lat_p999_us", "lat_p9999_us",
     "lat_jitter_us", "lat_dropped",
 ]
-QUEUES = 8
+DEFAULT_QUEUES = 8
 
 
 def parse_args():
@@ -76,6 +82,10 @@ def parse_args():
     parser.add_argument("--duration", type=float, default=30.0, help="seconds per rate")
     parser.add_argument("--pkt-size", type=int, default=1500)
     parser.add_argument("--flows", type=int, default=4096)
+    parser.add_argument("--ports", default="0",
+                        help="TRex ports to send on, e.g. 0,1 with two links (default 0)")
+    parser.add_argument("--queues", type=int, default=DEFAULT_QUEUES,
+                        help="the dut's Rx queues per port: 1, 2, 4 or 8 (default 8)")
     parser.add_argument("--hot-share", type=float, default=0.0,
                         help="fraction of the data rate sent as one flow to one queue "
                              "(imbalance); put it in --label too")
@@ -118,18 +128,21 @@ def parse_args():
     parser.add_argument("--details", help="JSON lines file, appended to "
                                           "(default: --out with .jsonl)")
     args = parser.parse_args()
+    args.ports = sorted({int(p) for p in args.ports.split(",")})
+    if args.queues < 1 or args.queues > 8 or args.queues & (args.queues - 1):
+        parser.error("--queues must be 1, 2, 4 or 8 (the dut's RETA)")
     args.size_list = None
     if args.trace:
         apply_trace(args)
-    if not 0 <= args.hot_queue < QUEUES:
-        parser.error("--hot-queue must be 0-%d" % (QUEUES - 1))
+    if not 0 <= args.hot_queue < args.queues:
+        parser.error("--hot-queue must be 0-%d" % (args.queues - 1))
     if args.schedule and not args.queue_weights:
         parser.error("--schedule needs --queue-weights")
     if args.schedule and args.hot_move:
         parser.error("--schedule and --hot-move are exclusive")
     args.details = args.details or os.path.splitext(args.out)[0] + ".jsonl"
     args.sizes = ([int(s) for s in args.queue_sizes.split(",")] if args.queue_sizes
-                  else [args.pkt_size] * QUEUES)
+                  else [args.pkt_size] * args.queues)
     args.weights = ([float(w) for w in args.queue_weights.split(",")]
                     if args.queue_weights else None)
     return args
@@ -142,15 +155,19 @@ def apply_trace(args):
         trace = json.load(f)
     if args.hot_move or args.hot_share:
         sys.exit("--trace replaces --hot-share and --hot-move")
+    if len(trace["steps"][0][1]) != args.queues:
+        sys.exit("--trace has %d queues per step, --queues is %d"
+                 % (len(trace["steps"][0][1]), args.queues))
     args.queue_weights = ",".join(str(w) for w in trace["steps"][0][1])
-    args.queue_sizes = ",".join([str(int(round(trace["mean_size"])))] * QUEUES)
+    args.queue_sizes = ",".join([str(int(round(trace["mean_size"])))] * args.queues)
     args.size_list = ",".join(str(s) for s in trace["size_list"])
     args.schedule = args.schedule or args.trace
 
 
-def load_streams(args, hot_queue):
+def load_streams(args, hot_queue, port):
     tunables = dict(pkt_size=args.pkt_size, flows=args.flows, hot_share=args.hot_share,
-                    hot_queue=hot_queue, lat_queues=args.lat_queues, lat_pps=args.lat_pps)
+                    hot_queue=hot_queue, lat_queues=args.lat_queues, lat_pps=args.lat_pps,
+                    port=port, queues=args.queues)
     if args.queue_weights:
         tunables.update(queue_weights=args.queue_weights,
                         queue_sizes=",".join(str(s) for s in args.sizes))
@@ -160,14 +177,20 @@ def load_streams(args, hot_queue):
 
 
 def latency_pgs(args, hot_queue):
-    """pg_id -> Rx queue, for the latency streams the profile builds."""
-    if args.lat_queues == "hot":
-        return {LATENCY_PG_ID: hot_queue}
+    """pg_id -> (port, Rx queue), for the latency streams the profile builds."""
     if args.lat_queues == "none":
         return {}
-    queues = range(QUEUES) if args.lat_queues == "all" else \
+    if args.lat_queues == "hot":
+        return {LATENCY_PG_ID + PORT_PG_STRIDE * p: (p, hot_queue) for p in args.ports}
+    queues = range(args.queues) if args.lat_queues == "all" else \
         sorted({int(q) for q in args.lat_queues.split(",")})
-    return {LATENCY_PG_BASE + q: q for q in queues}
+    return {LATENCY_PG_BASE + q + PORT_PG_STRIDE * p: (p, q)
+            for p in args.ports for q in queues}
+
+
+def queue_name(args, port, queue):
+    """q3 with one port, as every summary so far; p1q3 with several."""
+    return "q%s" % queue if len(args.ports) == 1 else "p%sq%s" % (port, queue)
 
 
 def by_pg(table, pg):
@@ -175,8 +198,14 @@ def by_pg(table, pg):
     return table.get(pg, table.get(str(pg), {}))
 
 
-def port_count(per_port):
-    return per_port.get(TX_PORT, per_port.get(str(TX_PORT), 0)) if per_port else 0
+def flow_total(per_port):
+    """A pg_id's packets over every port: a latency packet comes back on the
+    port its link leads to, which with two ports need not be the one it left."""
+    if not per_port:
+        return 0
+    if "total" in per_port:
+        return per_port["total"]
+    return sum(v for k, v in per_port.items() if str(k).isdigit())
 
 
 class Window:
@@ -184,36 +213,39 @@ class Window:
 
     def __init__(self, client, args, streams_by_queue, rate_pct, duration):
         self.client, self.args = client, args
-        self.streams_by_queue = streams_by_queue
+        self.streams_by_queue = streams_by_queue    # port -> hot queue -> streams
         self.rate_pct, self.duration = rate_pct, duration
-        self.series, self.steps_done, self.offered = [], [], [0.0] * QUEUES
+        self.series, self.steps_done, self.offered = [], [], [0.0] * args.queues
 
     def run(self, steps):
         """Offer the rate for the window; returns stats, xstats, latency by pg."""
-        client, args = self.client, self.args
-        client.reset(ports=[TX_PORT])
+        client, args, ports = self.client, self.args, self.args.ports
+        client.reset(ports=ports)
         client.clear_stats()
         snapshots, queue, elapsed = {}, args.hot_queue, 0.0
         while elapsed < self.duration - 1e-9:
             seconds = (self.duration - elapsed if args.hot_move <= 0
                        else min(args.hot_move, self.duration - elapsed))
-            client.remove_all_streams(ports=[TX_PORT])
-            streams = self.streams_by_queue[queue]
-            ids = client.add_streams(streams, ports=[TX_PORT])
-            client.start(ports=[TX_PORT], mult="%g%%" % self.rate_pct, duration=seconds)
-            self.follow(seconds, data_stream_ids(streams, ids), steps)
-            client.wait_on_traffic(ports=[TX_PORT])
+            client.remove_all_streams(ports=ports)
+            data_ids = {}
+            for port in ports:
+                streams = self.streams_by_queue[port][queue]
+                ids = client.add_streams(streams, ports=[port])
+                data_ids[port] = data_stream_ids(streams, ids)
+            client.start(ports=ports, mult="%g%%" % self.rate_pct, duration=seconds)
+            self.follow(seconds, data_ids, steps)
+            client.wait_on_traffic(ports=ports)
             stats = client.get_stats()
             for pg in latency_pgs(args, queue):
                 snapshots.setdefault(pg, []).append(by_pg(stats.get("latency", {}), pg))
             elapsed += seconds
-            queue = (queue + 1) % QUEUES
+            queue = (queue + 1) % args.queues
         time.sleep(RX_DRAIN_SECONDS)
         stats = client.get_stats()
         latency = {}
         for pg, snaps in snapshots.items():
             latency[pg] = trex_latency.merge_snapshots(snaps + [by_pg(stats.get("latency", {}), pg)])
-        return stats, client.get_xstats(TX_PORT), latency
+        return stats, {port: client.get_xstats(port) for port in ports}, latency
 
     def follow(self, seconds, data_ids, steps):
         """Apply the schedule and take per-second samples until the segment ends."""
@@ -245,24 +277,25 @@ class Window:
         self.account(mark, seconds, weights)
 
     def update_rates(self, data_ids, weights):
-        pps = schedule_mod.stream_pps(weights, self.args.sizes, self.rate_pct)
-        for q, sid in data_ids.items():
-            self.client.update_streams(TX_PORT, mult="%.1fpps" % pps[q], stream_ids=[sid])
+        pps = schedule_mod.stream_pps(weights, self.args.sizes, self.rate_pct, LINE_GBPS)
+        for port, by_queue in data_ids.items():
+            for q, sid in by_queue.items():
+                self.client.update_streams(port, mult="%.1fpps" % pps[q], stream_ids=[sid])
 
     def account(self, t0, t1, weights):
         """Packets offered to each queue in [t0, t1], at the commanded rates."""
         if t1 <= t0 or weights is None:
             return
-        pps = schedule_mod.stream_pps(weights, self.args.sizes, self.rate_pct)
-        for q in range(QUEUES):
-            self.offered[q] += pps[q] * (t1 - t0)
+        pps = schedule_mod.stream_pps(weights, self.args.sizes, self.rate_pct, LINE_GBPS)
+        for q in range(self.args.queues):
+            self.offered[q] += pps[q] * (t1 - t0) * len(self.args.ports)
 
     def sample(self, start, last):
-        stats = self.client.get_stats(ports=[TX_PORT])
-        xstats = self.client.get_xstats(TX_PORT)
+        ports = self.args.ports
+        stats = self.client.get_stats(ports=ports)
         now = {"t": round(time.time() - start, 3),
-               "tx": stats[TX_PORT]["opackets"],
-               "rx": xstats.get(RX_UNICAST_XSTAT, 0),
+               "tx": sum(stats[p]["opackets"] for p in ports),
+               "rx": sum(self.client.get_xstats(p).get(RX_UNICAST_XSTAT, 0) for p in ports),
                "lat_last_max": {str(pg): by_pg(stats.get("latency", {}), pg)
                                 .get("latency", {}).get("last_max")
                                 for pg in latency_pgs(self.args, self.args.hot_queue)}}
@@ -298,8 +331,8 @@ def latency_records(args, stats, latency):
     records = {}
     for pg, entry in latency.items():
         flow = by_pg(stats.get("flow_stats", {}), pg)
-        records[pg] = trex_latency.summarize(entry, port_count(flow.get("tx_pkts")),
-                                             port_count(flow.get("rx_pkts")))
+        records[pg] = trex_latency.summarize(entry, flow_total(flow.get("tx_pkts")),
+                                             flow_total(flow.get("rx_pkts")))
     return records, trex_latency.aggregate(list(records.values()))
 
 
@@ -316,11 +349,11 @@ def check_hdrh(args, records):
 
 
 def summarize(args, phase, rate_pct, duration, stats, xstats, agg):
+    """One CSV row; with several ports, every count is the sum over them."""
     pkt_size = args.pkt_size
-    port = stats[TX_PORT]
-    tx = port["opackets"]
-    rx = read_xstat(xstats, RX_UNICAST_XSTAT)
-    rx_noise = sum(read_xstat(xstats, name) for name in RX_NOISE_XSTATS)
+    tx = sum(stats[p]["opackets"] for p in args.ports)
+    rx = sum(read_xstat(xstats[p], RX_UNICAST_XSTAT) for p in args.ports)
+    rx_noise = sum(read_xstat(xstats[p], name) for p in args.ports for name in RX_NOISE_XSTATS)
     loss = tx - rx
     if args.weights:
         share = [w / sum(args.weights) for w in args.weights]
@@ -342,7 +375,7 @@ def summarize(args, phase, rate_pct, duration, stats, xstats, agg):
         "lat_queues": args.lat_queues,
         "tx_pkts": tx,
         "rx_pkts": rx,
-        "rx_port_pkts": port["ipackets"],
+        "rx_port_pkts": sum(stats[p]["ipackets"] for p in args.ports),
         "rx_noise_pkts": rx_noise,
         "loss_pkts": loss,
         "loss_pct": round(100.0 * loss / tx, 6) if tx else 0.0,
@@ -407,9 +440,10 @@ def run_and_report(client, args, streams_by_queue, phase, rate_pct, duration=Non
     append_row(args.out, row)
 
     key = {"label": args.label, "phase": phase, "rate_pct": rate_pct, "duration_s": duration,
-           "time": time.strftime("%Y-%m-%d %H:%M:%S")}
+           "time": time.strftime("%Y-%m-%d %H:%M:%S"), "ports": len(args.ports)}
     pgs = latency_pgs(args, args.hot_queue)
-    details = [dict(key, kind="latency", pg_id=pg, queue=pgs.get(pg), **rec)
+    details = [dict(key, kind="latency", pg_id=pg, port=pgs.get(pg, (None, None))[0],
+                    queue=pgs.get(pg, (None, None))[1], **rec)
                for pg, rec in sorted(records.items())]
     details.append(dict(key, kind="latency", pg_id=None, queue="all", **agg))
     offered = None
@@ -434,8 +468,9 @@ def run_and_report(client, args, streams_by_queue, phase, rate_pct, duration=Non
               duration, phase), flush=True)
     for pg, rec in sorted(records.items()):
         lost = (rec["tx"] - rec["rx"]) if rec.get("tx") is not None and rec.get("rx") is not None else None
-        print("LAT %s %s q%s n=%s avg=%s p50=%s p99=%s p99.9=%s p99.99=%s max=%s lost=%s" % (
-            args.label, phase, pgs.get(pg), rec.get("samples"),
+        port, queue = pgs.get(pg, (None, None))
+        print("LAT %s %s %s n=%s avg=%s p50=%s p99=%s p99.9=%s p99.99=%s max=%s lost=%s" % (
+            args.label, phase, queue_name(args, port, queue), rec.get("samples"),
             None if rec["avg_us"] is None else round(rec["avg_us"], 1),
             rec.get("p50"), rec.get("p99"), rec.get("p999"), rec.get("p9999"),
             rec.get("max_us"), lost), flush=True)
@@ -457,7 +492,7 @@ def search(client, args, streams_by_queue):
                 best, low = mid, mid
             else:
                 high = mid
-    line_mpps = 100e9 / ((args.pkt_size + 4 + 20) * 8) / 1e6
+    line_mpps = len(args.ports) * LINE_GBPS * 1e9 / ((args.pkt_size + 4 + 20) * 8) / 1e6
     if best is None:
         print("NDR %s: no rate in [%s, %s]%% passed (loss tolerance %g%%)"
               % (args.label, args.search.split(",")[0], args.search.split(",")[1],
@@ -471,13 +506,13 @@ def search(client, args, streams_by_queue):
 def main():
     args = parse_args()
     check_csv(args.out)
-    queues = range(QUEUES) if args.hot_move > 0 else [args.hot_queue]
-    streams_by_queue = {q: load_streams(args, q) for q in queues}
+    queues = range(args.queues) if args.hot_move > 0 else [args.hot_queue]
+    streams_by_queue = {p: {q: load_streams(args, q, p) for q in queues} for p in args.ports}
 
     client = STLClient()
     client.connect()
     try:
-        client.acquire(ports=[TX_PORT], force=True)
+        client.acquire(ports=args.ports, force=True)
         rates = ([float(args.search.split(",")[1])] if args.search
                  else [float(r) for r in args.rates.split(",")])
         if args.warmup > 0:

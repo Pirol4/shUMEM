@@ -1,0 +1,23 @@
+# DDIO hit rate (pcm-pcie, the NIC's socket) at 2 x 98 Gb/s, n = 3 (f2).
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g2_ddio_fill-128_n01                     fill-128       -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_shringfix-8_n01                  shringfix-8    -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_privring-128_n01                 privring-128   -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_dyn-128_n01                      dyn-128        -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_privring-1024_n01                privring-1024  -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g2_ddio_privring-1024_n02                privring-1024  -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_fill-128_n02                     fill-128       -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_dyn-128_n02                      dyn-128        -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_privring-128_n02                 privring-128   -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_shringfix-8_n02                  shringfix-8    -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g2_ddio_dyn-128_n03                      dyn-128        -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_privring-128_n03                 privring-128   -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_privring-1024_n03                privring-1024  -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_shringfix-8_n03                  shringfix-8    -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g2_ddio_fill-128_n03                     fill-128       -  -  rates=98 duration=30 pcm=pcie --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

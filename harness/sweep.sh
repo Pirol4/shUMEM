@@ -17,7 +17,8 @@
 #   rates=<r1,r2,...>        instead of $RATES
 #   duration=<s>             instead of $DURATION
 #   stall=<core>:<us>:<ms>   run stall_core.py on <core> during the traffic,
-#                            <us> every <ms> (CLAUDE.md 17.10)
+#                            <us> every <ms> (CLAUDE.md 17.10); <core> is a CPU
+#                            or p<port>q<queue>, that queue's lcore
 #   cache=<n>                l3fwd's per-lcore mempool cache (default 256,
 #                            0 = none): every get/put through the common ring
 #   pcm=pcie                 record pcm-pcie (DDIO) instead of pcm-memory
@@ -27,11 +28,13 @@
 #                            c4df0acf6; 64 was the 19.27 setting)
 #   work=<N>                 every lcore does N random reads per packet in a
 #                            40 MiB buffer (l3fwd_work.h, CLAUDE.md 20)
-#   target=<lcore>:<N>       that lcore does N instead (the papers' target core)
+#   target=<lcores>:<N>      those lcores do N instead (the papers' target
+#                            core; one per port with two: p0q3,p1q3:800)
 #   payload=1                every lcore also reads each packet's payload
 #   mib=<M>                  size of the work buffer (default 40)
-#   hog=<n>                  n stress-ng STREAM workers on CPUs 9-15 during the
-#                            run (memory-bandwidth co-location, rxBisect Fig. 17)
+#   hog=<n>                  n stress-ng STREAM workers on the NIC socket's free
+#                            CPUs during the run (9-15 with one port; memory-
+#                            bandwidth co-location, rxBisect Fig. 17)
 #   overload=<ms>            dyn-* queues that do not drain for <ms> keep their
 #                            floor (fill_overload_ms; default 20 since fork
 #                            b96c6a87a, 0 = off)
@@ -55,6 +58,9 @@
 #   OCCUPANCY_US  l3fwd's Rx ring occupancy sample period (default 1000; 0: off)
 #   RESUME     1: skip lines whose label already has a block in summary.txt, so
 #              an interrupted battery can be started again (default 0)
+#   PORTS      2: both experiment ports, 2 x 100 Gb/s (CLAUDE.md 21); default 1
+#   QUEUES     Rx queues per port (default: 8 when they fit, setup/topology.py)
+#   TGEN_MAC2  with PORTS=2: src_mac of the tgen's second port (trex_cfg.yaml)
 #
 # Output: $EXP_DIR/sweep/<label>.out (l3fwd and rate_sweep output),
 # <label>.times (when each traffic window ended, dut clock), <label>.stall
@@ -75,15 +81,27 @@ L3FWD_BIN="${SHRING_DIR:-/mydata/dpdk-research/shring-dpdk}/build/examples/dpdk-
 TGEN_TREX_DIR=/local/repository/harness/trex
 OCCUPANCY_US="${OCCUPANCY_US:-1000}"
 RESUME="${RESUME:-0}"
-# CPUs no lcore, no PCM (CPU 0) and no ssh use: co-located memory hogs go here.
-HOG_CPUS=9-15
+PORTS="${PORTS:-1}"
+TOPOLOGY="$SCRIPT_DIR/../setup/topology.py"
+# The lcores of this layout, and the CPUs left (setup/topology.py): with one
+# port lcores 1-8, CPU 0 for PCM and ssh, hogs on 9-15, as every run so far.
+layout="$(python3 "$TOPOLOGY" --role dut --ports "$PORTS" ${QUEUES:+--queues "$QUEUES"} shell)" \
+    || { echo "ERROR: setup/topology.py failed (message above)" >&2; exit 1; }
+eval "$layout"
+QUEUES=$SHUMEM_QUEUES
+# CPUs no lcore, no PCM and no ssh use: co-located memory hogs go here.
+HOG_CPUS=$SHUMEM_HOG_CPUS
+# rate_sweep.py's options for this layout; none with one port of 8 queues.
+TRAFFIC_LAYOUT=""
+(( PORTS == 1 )) || TRAFFIC_LAYOUT+=" --ports $(seq -s, 0 $((PORTS - 1)))"
+(( QUEUES == 8 )) || TRAFFIC_LAYOUT+=" --queues $QUEUES"
 # rate_sweep.py waits this long after each window before reading counters.
 RX_DRAIN_S=1
 # Trimmed from each end of a window before averaging DRAM: TRex's ramp, the
 # ssh delay of the line that marks the end, PCM's 1 s sampling.
 PCM_TRIM_S=2
-# The ssh client runs beside busy-polling lcores 1-8; keep it on CPU 0.
-SSH=(taskset -c 0 ssh -o BatchMode=yes -o ConnectTimeout=10
+# The ssh client runs beside busy-polling lcores; keep it on a housekeeping CPU.
+SSH=(taskset -c "$SHUMEM_HK_CPU" ssh -o BatchMode=yes -o ConnectTimeout=10
      -o StrictHostKeyChecking=accept-new "$TGEN_HOST")
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -94,6 +112,7 @@ log() { echo "[sweep $(date +%H:%M:%S)] $*"; }
 [[ "$EUID" -ne 0 ]] || die "run as your own user, not with sudo: the ssh to tgen needs your key"
 [[ -n "${TGEN_MAC:-}" ]] || die "set TGEN_MAC (src_mac in tgen's /etc/trex_cfg.yaml)"
 [[ -n "$TGEN_HOST" ]] || die "set TGEN_HOST to the tgen's control-network name (CloudLab List View)"
+(( PORTS == 1 )) || [[ -n "${TGEN_MAC2:-}" ]] || die "PORTS=$PORTS: set TGEN_MAC2 too (the second src_mac in tgen's /etc/trex_cfg.yaml)"
 sudo -n true 2>/dev/null || die "sudo asks for a password; run_l3fwd.sh needs root"
 [[ -w "$EXP_DIR" ]] || die "$EXP_DIR not writable: sudo mkdir -p $EXP_DIR && sudo chown \$USER $EXP_DIR"
 ! pgrep -x dpdk-l3fwd >/dev/null || die "an l3fwd is already running; stop it first"
@@ -114,6 +133,10 @@ grep -aq "L3FWD_MEMPOOL_GROUPS" "$L3FWD_BIN" 2>/dev/null && grep -aq "rmp_fix" "
     && grep -aq "L3FWD_OCCUPANCY_US" "$L3FWD_BIN" && grep -aq "without an empty poll" "$L3FWD_BIN" \
     || die "$L3FWD_BIN is missing or older than fork 5f3a20100:
        sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
+# Two ports need the per-port xstats headers and per-port targets (9edbb327b).
+(( PORTS == 1 )) || grep -aq "XSTATS port" "$L3FWD_BIN" \
+    || die "PORTS=$PORTS needs an l3fwd from fork 9edbb327b or later:
+       sudo git -C ${L3FWD_BIN%/build/*} pull && sudo ninja -C ${L3FWD_BIN%/examples/*}"
 # HDR latency needs the hdrh module where rate_sweep.py runs.
 "${SSH[@]}" "python3 -c 'import hdrh'" 2>/dev/null \
     || die "python3 on $TGEN_HOST lacks hdrh: run 'sudo pip3 install hdrhistogram' there"
@@ -123,20 +146,28 @@ for trace in $(grep -vE '^[[:space:]]*(#|$)' "$PLAN" | grep -oE -- '--trace [^ ]
 done
 if grep -vE '^[[:space:]]*(#|$)' "$PLAN" | grep -q ' hog='; then
     command -v stress-ng >/dev/null || die "the plan uses hog= but stress-ng is missing: sudo apt-get install -y stress-ng"
+    [[ -n "$HOG_CPUS" ]] || die "the plan uses hog= but no CPU of the NIC's socket is left (lcores $SHUMEM_LCORES); use fewer QUEUES"
 fi
 
 # Not fatal, but every number of CLAUDE.md 19.12-19.18 assumes them.
 warn() { echo "WARNING: $*" >&2; }
-# Numbered interrupts that fire on lcores 1-8 within 3 s (the ACPI one fires
+# Numbered interrupts that fire on the lcores within 3 s (the ACPI one fires
 # every second, the control NIC's with SSH traffic).
-lcore_irqs="$(python3 - <<'PY'
+lcore_irqs="$(LCORE_LIST="$SHUMEM_LCORE_LIST" python3 - <<'PY'
+import os
 import time
-LCORES = range(1, 9)
+LCORES = [int(c) for c in os.environ["LCORE_LIST"].split()]
+with open("/proc/interrupts") as f:
+    HEADER = f.readline().split()
+# Lcores /proc/interrupts lists (an offline CPU has no column).
+LCORES = [c for c in LCORES if "CPU%d" % c in HEADER]
 def snapshot():
     rows = {}
+    if not LCORES:
+        return rows
     with open("/proc/interrupts") as f:
         cpus = f.readline().split()
-        cols = [cpus.index("CPU%d" % c) for c in LCORES if "CPU%d" % c in cpus]
+        cols = [cpus.index("CPU%d" % c) for c in LCORES]
         for line in f:
             irq, _, rest = line.partition(":")
             fields = rest.split()
@@ -156,25 +187,33 @@ print("; ".join(hits))
 PY
 )"
 [[ -z "$lcore_irqs" ]] || warn "interrupts firing on the lcores: $lcore_irqs — move them (setup/node-setup.sh, CLAUDE.md 19.14)"
-# node-setup.sh routes it to every CPU off the lcores (e.g. 0,9-16,25-31),
-# not to CPU 0 alone, so warn only when the list reaches lcores 1-8.
-acpi_cpus="$(cat /proc/irq/9/smp_affinity_list 2>/dev/null || echo '?')"
-acpi_on_lcores="$(python3 -c '
+# CPUs of a cpulist ("0,9-16") that are lcores, as a cpulist.
+lcores_in() {
+    python3 -c '
 import sys
 cpus = set()
 for part in sys.argv[1].split(","):
     lo, _, hi = part.partition("-")
     cpus.update(range(int(lo), int(hi or lo) + 1))
-print(",".join(str(c) for c in sorted(cpus & set(range(1, 9)))))
-' "$acpi_cpus" 2>/dev/null || echo '?')"
-[[ -z "$acpi_on_lcores" ]] || warn "ACPI IRQ 9 may fire on lcores $acpi_on_lcores (affinity $acpi_cpus): lcore 1 will pause twice a second (CLAUDE.md 19.9)"
+print(",".join(str(c) for c in sorted(cpus & {int(c) for c in sys.argv[2].split()})))
+' "$1" "$SHUMEM_LCORE_LIST" 2>/dev/null || echo '?'
+}
+# node-setup.sh routes it to every CPU off the lcores (e.g. 0,9-16,25-31),
+# not to CPU 0 alone, so warn only when the list reaches the lcores.
+acpi_cpus="$(cat /proc/irq/9/smp_affinity_list 2>/dev/null || echo '?')"
+acpi_on_lcores="$(lcores_in "$acpi_cpus")"
+[[ -z "$acpi_on_lcores" ]] || warn "ACPI IRQ 9 may fire on lcores $acpi_on_lcores (affinity $acpi_cpus): those lcores will pause twice a second (CLAUDE.md 19.9)"
 # The final evaluation runs on a tuned kernel (setup/kernel-tuning.sh, 19.25).
 isolated="$(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
-[[ "$isolated" == 1-8 ]] || warn "lcores 1-8 are not isolated (isolated: '${isolated:-none}'): run setup/kernel-tuning.sh and reboot for evaluation runs"
-exp_if="$(ip -o -4 addr show | awk '$4 ~ /^10\.10\.1\.1\// {print $2; exit}')"
-if [[ -n "$exp_if" ]] && sudo -n ethtool -a "$exp_if" 2>/dev/null | grep -qE '^(RX|TX):[[:space:]]+on'; then
-    warn "pause frames are on on $exp_if (CLAUDE.md 15.5): sudo ethtool -A $exp_if rx off tx off"
-fi
+[[ -n "$isolated" && "$(lcores_in "$isolated")" == "$(tr ' ' ',' <<<"$SHUMEM_LCORE_LIST")" ]] \
+    || warn "lcores $SHUMEM_LCORES are not all isolated (isolated: '${isolated:-none}'): run setup/kernel-tuning.sh and reboot for evaluation runs"
+read -r -a EXP_IFS <<<"$SHUMEM_IFACES"
+EXP_IFS=("${EXP_IFS[@]:0:PORTS}")
+for exp_if in "${EXP_IFS[@]}"; do
+    if sudo -n ethtool -a "$exp_if" 2>/dev/null | grep -qE '^(RX|TX):[[:space:]]+on'; then
+        warn "pause frames are on on $exp_if (CLAUDE.md 15.5): sudo ethtool -A $exp_if rx off tx off"
+    fi
+done
 
 mkdir -p "$OUT_DIR"
 SUMMARY="$OUT_DIR/summary.txt"
@@ -241,9 +280,17 @@ trap 'stop_hog; stop_stall; stop_l3fwd' EXIT
 
 # The kernel keeps the experiment NIC's hardware counters while DPDK drives it
 # (bifurcated mlx5): drops inside the NIC that DPDK's xstats do not show.
+# With two ports each counter is prefixed with its interface.
 ethtool_snapshot() {
-    [[ -n "$exp_if" ]] || return 0
-    sudo -n ethtool -S "$exp_if" 2>/dev/null >"$1" || true
+    local exp_if
+    : >"$1"
+    for exp_if in "${EXP_IFS[@]}"; do
+        if (( ${#EXP_IFS[@]} == 1 )); then
+            sudo -n ethtool -S "$exp_if" 2>/dev/null >>"$1" || true
+        else
+            sudo -n ethtool -S "$exp_if" 2>/dev/null | sed "s/^ */     $exp_if./" >>"$1" || true
+        fi
+    done
 }
 
 ethtool_deltas() {
@@ -294,22 +341,37 @@ summarize() {
         echo "   run: $run"
         grep -E ' tx=[0-9]+ rx=[0-9]+ ' "$out" | sed 's/^/   /' || true
         grep -E '^(NDR|LAT|WARNING) ' "$out" | sed 's/^/   /' || true
-        awk '/ \[[0-9]+\] = -?[0-9]+$/ { v[$1] = $NF }
+        # Every lcore prints its port's whole xstats list; the last value per
+        # (port, name) is kept. With one port the lines are those of every run
+        # so far; with two, the counters are summed over the ports and the
+        # per-queue lines name their port.
+        awk -v ports="$PORTS" -v queues="$QUEUES" '
+             BEGIN { port = 0 }      # an l3fwd before fork 9edbb327b prints no header
+             /^XSTATS port [0-9]+ lcore/ { port = $3 + 0 }
+             / \[[0-9]+\] = -?[0-9]+$/ { v[port, $1] = $NF }
+             function total(name,   p, sum) { for (p = 0; p < ports; p++) sum += v[p, name]; return sum }
              END {
                  # shRing drops some packets without counting them as missed
                  # (19.24): rx_phy - rx_good is the dut-side loss that always holds.
                  printf "   rx_missed_errors=%s  rx_phy_packets=%s  rx_good_packets=%s  phy-good=%s  tx_phy_packets=%s\n",
-                        v["rx_missed_errors"], v["rx_phy_packets"], v["rx_good_packets"],
-                        v["rx_phy_packets"] - v["rx_good_packets"], v["tx_phy_packets"]
-                 line = "   per queue rx:"
-                 for (q = 0; q < 8; q++) line = line " " v["rx_q" q "_packets"]
-                 print line
-                 line = "   per queue tx:"
-                 for (q = 0; q < 8; q++) line = line " " v["tx_q" q "_packets"]
-                 print line
+                        total("rx_missed_errors"), total("rx_phy_packets"), total("rx_good_packets"),
+                        total("rx_phy_packets") - total("rx_good_packets"), total("tx_phy_packets")
+                 for (p = 0; p < ports; p++) {
+                     tag = ports == 1 ? "" : " (port " p ")"
+                     line = "   per queue rx" tag ":"
+                     for (q = 0; q < queues; q++) line = line " " v[p, "rx_q" q "_packets"]
+                     print line
+                     line = "   per queue tx" tag ":"
+                     for (q = 0; q < queues; q++) line = line " " v[p, "tx_q" q "_packets"]
+                     print line
+                 }
              }' "$out"
         grep -oE 'contention [0-9]+' "$out" | tail -1 | sed 's/^/   /' || true
-        grep -oE 'Rx queue [0-9]+: FILL credits:.*' "$out" | sed 's/^/   /' || true
+        if (( PORTS == 1 )); then
+            grep -oE 'Rx queue [0-9]+: FILL credits:.*' "$out" | sed 's/^/   /' || true
+        else
+            grep -oE 'port [0-9]+ Rx queue [0-9]+: FILL credits:.*' "$out" | sed 's/^/   /' || true
+        fi
         # Cost of the path and the mempool's shared ring (fork 9601a7530 on).
         grep -oE 'MEMPOOL .*' "$out" | sed 's/^/   /' || true
         # Per lcore: cost (the target lcore differs), work, ring occupancy.
@@ -337,6 +399,11 @@ summarize() {
     } | tee -a "$SUMMARY"
 }
 
+# "p0q3,4" -> "<lcore of port 0 queue 3>,4" (setup/topology.py).
+resolve_lcores() {
+    python3 "$TOPOLOGY" --role dut --ports "$PORTS" --queues "$QUEUES" "lcore:$1"
+}
+
 run_one() {
     local label="$1" system="$2" window="$3" headroom="$4"
     shift 4
@@ -347,7 +414,8 @@ run_one() {
             rates=*)    rates="${arg#rates=}" ;;
             duration=*) duration="${arg#duration=}" ;;
             stall=*)    stall="${arg#stall=}"
-                        [[ "$stall" =~ ^[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core>:<us>:<ms>" ;;
+                        [[ "$stall" =~ ^(p[0-9]+q)?[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core|p<port>q<queue>>:<us>:<ms>"
+                        stall="$(resolve_lcores "${stall%%:*}"):${stall#*:}" || die "$label: $arg" ;;
             pcm=*)      pcm="${arg#pcm=}"
                         [[ "$pcm" == memory || "$pcm" == pcie ]] || die "$label: bad $arg, want pcm=memory|pcie" ;;
             ops=*)      ops="${arg#ops=}"
@@ -361,7 +429,10 @@ run_one() {
             work=*)     work="${arg#work=}"
                         [[ "$work" =~ ^[0-9]+$ ]] || die "$label: bad $arg, want work=<n>" ;;
             target=*)   target="${arg#target=}"
-                        [[ "$target" =~ ^[1-8]:[0-9]+$ ]] || die "$label: bad $arg, want target=<lcore 1-8>:<n>" ;;
+                        [[ "$target" =~ ^((p[0-9]+q)?[0-9]+,)*(p[0-9]+q)?[0-9]+:[0-9]+$ ]] || die "$label: bad $arg, want target=<lcore|p<port>q<queue>>[,...]:<n>"
+                        target="$(resolve_lcores "${target%%:*}"):${target#*:}" || die "$label: $arg"
+                        [[ "$(lcores_in "${target%%:*}")" == "$(tr ',' '\n' <<<"${target%%:*}" | sort -nu | paste -sd,)" ]] \
+                            || die "$label: target ${target%%:*} is not all lcores ($SHUMEM_LCORES)" ;;
             payload=*)  payload="${arg#payload=}"
                         [[ "$payload" =~ ^[01]$ ]] || die "$label: bad $arg, want payload=0|1" ;;
             mib=*)      mib="${arg#mib=}"
@@ -393,6 +464,8 @@ run_one() {
     [[ -z "$runway" ]] || env_args+=("FILL_RUNWAY_NS=$runway")
     env_args+=("L3FWD_OCCUPANCY_US=$OCCUPANCY_US")
 
+    (( PORTS == 1 )) || env_args+=("PORTS=$PORTS" "TGEN_MAC2=$TGEN_MAC2")
+    (( PORTS == 1 && QUEUES == 8 )) || env_args+=("QUEUES=$QUEUES")
     log "$label: starting $system ${env_args[*]:-}"
     # Append mode for every writer of $out: l3fwd's final counters would
     # otherwise land at its own file offset, over rate_sweep's lines.
@@ -434,7 +507,7 @@ run_one() {
     # clock, the one PCM writes, for DRAM per window. Unbuffered: over ssh
     # Python block-buffers stdout and every line arrived at exit (19-Oct).
     : >"$OUT_DIR/$label.times"
-    if ! "${SSH[@]}" "cd $TGEN_TREX_DIR && PYTHONUNBUFFERED=1 ./rate_sweep.py --label $label --rates $rates --duration $duration --out $CSV ${extra[*]:-}" 2>&1 \
+    if ! "${SSH[@]}" "cd $TGEN_TREX_DIR && PYTHONUNBUFFERED=1 ./rate_sweep.py --label $label --rates $rates --duration $duration --out $CSV$TRAFFIC_LAYOUT ${extra[*]:-}" 2>&1 \
             | while IFS= read -r line; do
                   printf '%s\n' "$line"
                   [[ "$line" != *" tx="*" rx="* ]] || printf '%s %s\n' "$(date +%s.%N)" "$line" >>"$OUT_DIR/$label.times"
@@ -450,7 +523,7 @@ run_one() {
     sleep 2
     stop_l3fwd
     summarize "$label" "$out" "$duration" \
-        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} overload=${overload:--} runway=${runway:--} extra=${extra[*]:--}"
+        "system=$system window_ms=$window headroom_pct=$headroom rates=$rates duration=$duration stall=${stall:--} cache=${cache:-256} pcm=$pcm ops=${ops:-ring_mp_mc} groups=${groups:-1} reserve=${reserve:--} work=${work:-0} target=${target:--} payload=${payload:-0} mib=${mib:-40} hog=${hog:-0} overload=${overload:--} runway=${runway:--} extra=${extra[*]:--}$( ((PORTS == 1)) || echo " ports=$PORTS queues=$QUEUES lcores=$SHUMEM_LCORES")"
     # Let the hugepages and the port come back before the next start.
     sleep 5
 }

@@ -1,0 +1,70 @@
+# Processing variability at 2 x 98 Gb/s (rxBisect Fig. 14, one target core
+# per NIC): every lcore 2 random reads per packet, queue 3 of each port
+# (~1 Gb/s of that port) 800/1600/2400/4800. n = 3.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g5_pv800_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-1024_n01               privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-128_n01               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-128_n01               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_privring-128_n01               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-128_n01                privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g5_pv2400_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-128_n02               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-128_n02               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_privring-128_n02               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-128_n02                privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-1024_n02               privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g5_pv1600_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-1024_n03               privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-128_n03               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_privring-128_n03                privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_privring-128_n03               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv1600_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv800_fill-128_n03                    fill-128       -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-128_n03               privring-128   -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv2400_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g5_pv4800_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=2 target=p0q3,p1q3:4800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

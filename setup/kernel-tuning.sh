@@ -11,32 +11,48 @@
 #   setup/kernel-tuning.sh --check       # after the reboot: all lines OK?
 #   sudo setup/kernel-tuning.sh --undo   # back to the stock command line
 #
-# What each parameter does, for lcores 1-8 (l3fwd's forwarding cores):
-#   isolcpus=domain,managed_irq,1-8        no scheduler balancing onto them and
+# The lcores and the housekeeping CPUs come from setup/topology.py, for every
+# experiment port the node has: on sm110p with one link that is lcores 1-8 and
+# housekeeping 0,9-15, as in every run up to CLAUDE.md 20; on sm220u with two
+# links, 16 cores of the NIC's socket (CLAUDE.md 21).
+# What each parameter does, for those lcores (l3fwd's forwarding cores):
+#   isolcpus=domain,managed_irq,<lcores>   no scheduler balancing onto them and
 #                                          no managed IRQs; only pinned threads run
-#   irqaffinity=0,9-15                     default IRQ affinity: never the lcores
+#   irqaffinity=<housekeeping>             default IRQ affinity: never the lcores
 # Not used: nohz_full, rcu_nocbs and isolcpus' "nohz" flag. Ubuntu 22.04's
 # generic kernel (5.15.0-187 on sm110p) is built without CONFIG_NO_HZ_FULL;
 # booted with them it logs "Housekeeping: nohz unsupported" and drops the whole
 # isolcpus= parameter, so nothing was isolated (2026-10-19). The periodic tick
 # therefore still runs on the lcores; only a nohz_full kernel (e.g. Ubuntu's
 # lowlatency flavour) would remove it.
-#   nosmt                                  hyperthreads off (16 CPUs, 0-15), as the
-#                                          shRing paper runs
+#   nosmt                                  hyperthreads off (16 CPUs per socket), as
+#                                          the shRing paper runs
 #   nmi_watchdog=0                         no periodic NMI on every CPU
-#   default_hugepagesz=1G hugepagesz=1G hugepages=16
-#                                          16 GiB of 1 GiB pages, as the paper; the
-#                                          mbuf pool then needs a handful of TLB entries
+#   default_hugepagesz=1G hugepagesz=1G hugepages=<16 per NUMA node>
+#                                          16 GiB of 1 GiB pages on each node (the
+#                                          kernel spreads boot-time pages evenly), as
+#                                          the paper; the mbuf pool then needs a
+#                                          handful of TLB entries
 # The tgen is left alone: TRex already runs on distinct physical cores.
 
 set -euo pipefail
 
 DROPIN=/etc/default/grub.d/99-shumem-tuning.cfg
-LCORES=1-8
-HOUSEKEEPING=0,9-15
-PARAMS="isolcpus=domain,managed_irq,$LCORES"
-PARAMS+=" irqaffinity=$HOUSEKEEPING nosmt nmi_watchdog=0"
-PARAMS+=" default_hugepagesz=1G hugepagesz=1G hugepages=16"
+TOPOLOGY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/topology.py"
+
+# Sets LCORES, HOUSEKEEPING, HUGEPAGES_1G and PARAMS for this node.
+load_topology() {
+    local layout
+    layout="$(python3 "$TOPOLOGY" --role dut shell)" \
+        || { echo "setup/topology.py failed (message above)" >&2; exit 1; }
+    eval "$layout"
+    LCORES=$SHUMEM_LCORES
+    HOUSEKEEPING=$SHUMEM_HOUSEKEEPING
+    HUGEPAGES_1G=$((16 * SHUMEM_NODES))
+    PARAMS="isolcpus=domain,managed_irq,$LCORES"
+    PARAMS+=" irqaffinity=$HOUSEKEEPING nosmt nmi_watchdog=0"
+    PARAMS+=" default_hugepagesz=1G hugepagesz=1G hugepages=$HUGEPAGES_1G"
+}
 
 check() {
     local bad=0 cmdline isolated smt huge1g
@@ -53,7 +69,7 @@ check() {
     [[ "$isolated" == "$LCORES" ]] && ok "isolated CPUs $isolated" \
         || fail "isolated CPUs '${isolated:-none}', want $LCORES (dmesg | grep -i housekeep)"
     [[ "$smt" == 0 ]] && ok "hyperthreading off" || fail "hyperthreading active ($smt)"
-    (( huge1g >= 16 )) && ok "$huge1g x 1 GiB hugepages" || fail "$huge1g x 1 GiB hugepages, want 16"
+    (( huge1g >= HUGEPAGES_1G )) && ok "$huge1g x 1 GiB hugepages" || fail "$huge1g x 1 GiB hugepages, want $HUGEPAGES_1G"
     # What PCM opens; msr may be built in, and then lsmod does not list it.
     [[ -e /dev/cpu/0/msr ]] && ok "MSR device present (PCM)" || fail "no /dev/cpu/0/msr: sudo modprobe msr"
     return "$bad"
@@ -61,6 +77,7 @@ check() {
 
 case "${1:-}" in
     --check)
+        load_topology
         check ;;
     --undo)
         [[ "$EUID" -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
@@ -70,9 +87,12 @@ case "${1:-}" in
     "")
         [[ "$EUID" -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
         [[ "$(hostname)" == dut* ]] || { echo "this is for the dut (hostname $(hostname))" >&2; exit 1; }
+        load_topology
         mkdir -p "$(dirname "$DROPIN")"
         # A drop-in is read after /etc/default/grub, and rewriting it makes the
         # script idempotent; the stock command line is kept and extended.
+        echo "Experiment ports $SHUMEM_PORTS ($SHUMEM_IFACES) on NUMA node $SHUMEM_NUMA:" \
+             "lcores $LCORES, housekeeping $HOUSEKEEPING"
         printf '# Written by shUMEM setup/kernel-tuning.sh\nGRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX %s"\n' \
             "$PARAMS" >"$DROPIN"
         update-grub

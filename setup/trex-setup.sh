@@ -3,9 +3,13 @@
 # TRex traffic-generator setup for the tgen node. Run AFTER dev-environment.sh tgen.
 # See CLAUDE.md section 16 for the reasoning behind every step.
 #
-# Usage (on tgen, with the dut up so its MAC can be learned over the link):
+# Usage (on tgen, with the dut up so its MACs can be learned over the links):
 #   sudo setup/trex-setup.sh              # learns the dut MAC by pinging 10.10.1.1
 #   sudo setup/trex-setup.sh <dut-mac>    # or pass it explicitly
+#   sudo setup/trex-setup.sh <dut-mac> <dut-mac-2>   # two links (CLAUDE.md 21)
+# With two experiment links (10.10.1.x and 10.10.2.x) both ports are TRex
+# ports 0 and 1 and the 'dummy' port goes; the cores come from
+# setup/topology.py (latency 1, workers 2-7 with one link, as before).
 #
 # Safe to re-run: the rdma-core build and the TRex download are skipped when
 # already done; /etc/trex_cfg.yaml is regenerated (the old one is backed up),
@@ -34,15 +38,7 @@ RDMA_CORE_REF=v44.0
 RDMA_CORE_DIR="$SCRATCH/rdma-core-${RDMA_CORE_REF%.0}"
 REQUIRED_MLX5_SYMVER=MLX5_1.24
 
-TGEN_IP=10.10.1.2
-DUT_IP=10.10.1.1
-
-# Core layout written into trex_cfg.yaml. Must be distinct physical cores:
-# TRex worker threads sharing a core through hyperthreading give an unstable
-# transmit rate.
-MASTER_CORE=0
-LATENCY_CORE=1
-WORKER_CORES=(2 3 4 5 6 7)
+TOPOLOGY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/topology.py"
 
 log()     { echo -e "\n[trex-setup] $*"; }
 section() { echo -e "\n==== $* ====\n"; }
@@ -70,8 +66,10 @@ learn_neighbor_mac() {
     { ip neigh show "$ip" dev "$iface" | awk '/lladdr/ {print $3}' | head -1; } || true
 }
 
+# core_id repeats on every socket, so a core is (package, core_id).
 physical_core_of() {
-    cat "/sys/devices/system/cpu/cpu$1/topology/core_id"
+    local topo="/sys/devices/system/cpu/cpu$1/topology"
+    echo "$(cat "$topo/physical_package_id"):$(cat "$topo/core_id")"
 }
 
 # --- 1. Build dependencies --------------------------------------------------------
@@ -134,23 +132,33 @@ fi
 
 log "TRex libmlx5 requires $(highest_mlx5_symver "$TREX_DIR/so/x86_64/libmlx5-64.so")."
 
-# --- 4. Discover the experiment link ----------------------------------------------
+# --- 4. Discover the experiment links ---------------------------------------------
 
-section "Discovering the experiment NIC"
+section "Discovering the experiment NICs"
 
-IFACE="$(interface_with_ip "$TGEN_IP")"
-[[ -n "$IFACE" ]] || die "no interface holds $TGEN_IP — is this the tgen node?"
-PCI="$(basename "$(readlink -f "/sys/class/net/$IFACE/device")")"
-PCI_SHORT="${PCI#0000:}"
-TGEN_MAC="$(cat "/sys/class/net/$IFACE/address")"
+# Ports, PCI addresses and the core layout (setup/topology.py). Cores must be
+# distinct physical cores: TRex worker threads sharing a core through
+# hyperthreading give an unstable transmit rate.
+layout="$(python3 "$TOPOLOGY" --role tgen shell)" || die "setup/topology.py failed (message above)"
+eval "$layout"
+read -r -a IFACES <<<"$SHUMEM_IFACES"
+read -r -a PCIS <<<"$SHUMEM_PCIS"
+(( ${#IFACES[@]} >= 1 )) || die "no interface holds 10.10.<n>.2 — is this the tgen node?"
+MASTER_CORE=$SHUMEM_HK_CPU
+LATENCY_CORE=$SHUMEM_TREX_LATENCY
+read -r -a WORKER_CORES <<<"$SHUMEM_TREX_WORKERS"
 
-DUT_MAC="${1:-}"
-if [[ -z "$DUT_MAC" ]]; then
-    DUT_MAC="$(learn_neighbor_mac "$IFACE" "$DUT_IP")"
-    [[ -n "$DUT_MAC" ]] || die "could not learn the dut MAC via $DUT_IP; pass it as an argument"
-fi
-
-log "Interface $IFACE, PCI $PCI, tgen MAC $TGEN_MAC, dut MAC $DUT_MAC"
+TGEN_MACS=() DUT_MACS=()
+for p in "${!IFACES[@]}"; do
+    TGEN_MACS[p]="$(cat "/sys/class/net/${IFACES[p]}/address")"
+    mac="${*:p+1:1}"
+    if [[ -z "$mac" ]]; then
+        mac="$(learn_neighbor_mac "${IFACES[p]}" "10.10.$((p + 1)).1")"
+        [[ -n "$mac" ]] || die "could not learn the dut MAC via 10.10.$((p + 1)).1; pass it as argument $((p + 1))"
+    fi
+    DUT_MACS[p]="$mac"
+    log "Port $p: interface ${IFACES[p]}, PCI ${PCIS[p]}, tgen MAC ${TGEN_MACS[p]}, dut MAC ${DUT_MACS[p]}"
+done
 
 # --- 5. Verify the core layout ----------------------------------------------------
 
@@ -178,33 +186,46 @@ worker_list="$(IFS=,; echo "${WORKER_CORES[*]}" | sed 's/,/, /g')"
 
 # port_mtu: without it TRex asks mlx5 for MTU 65518 (derived from the PMD's
 # generic max_rx_pktlen) and dev_configure fails with -22.
-# 'dummy': TRex needs ports in pairs and the testbed has a single cable.
+# One link: 'dummy', because TRex needs ports in pairs. Two links: both real
+# ports, TRex port p on link p+1 (10.10.<p+1>.0/24).
 # MACs rather than IP/gateway: l3fwd is pure DPDK and never answers ARP.
-cat > "$TREX_CFG" <<EOF
+if (( ${#IFACES[@]} == 1 )); then
+    interfaces="'${PCIS[0]#0000:}', 'dummy'"
+    second_port="    - src_mac:  00:00:00:00:00:00   # dummy port, never transmits
+      dest_mac: 00:00:00:00:00:00"
+else
+    interfaces="'${PCIS[0]#0000:}', '${PCIS[1]#0000:}'"
+    second_port="    - src_mac:  ${TGEN_MACS[1]}   # tgen ${IFACES[1]}, link 2
+      dest_mac: ${DUT_MACS[1]}   # dut, link 2"
+fi
+cat > "$TREX_CFG" <<CFG
 - version: 2
   port_limit: 2
   port_mtu: 1500
-  interfaces: ['$PCI_SHORT', 'dummy']
+  interfaces: [$interfaces]
   port_info:
-    - src_mac:  $TGEN_MAC   # tgen $IFACE
-      dest_mac: $DUT_MAC   # dut experiment NIC
-    - src_mac:  00:00:00:00:00:00   # dummy port, never transmits
-      dest_mac: 00:00:00:00:00:00
+    - src_mac:  ${TGEN_MACS[0]}   # tgen ${IFACES[0]}, link 1
+      dest_mac: ${DUT_MACS[0]}   # dut, link 1
+$second_port
   platform:
     master_thread_id: $MASTER_CORE
     latency_thread_id: $LATENCY_CORE
     dual_if:
-      - socket: $(cat "/sys/bus/pci/devices/$PCI/numa_node")
+      - socket: $SHUMEM_NUMA
         threads: [$worker_list]
-EOF
+CFG
 cat "$TREX_CFG"
 
 # --- 7. Summary -------------------------------------------------------------------
 
 section "Done"
 
-echo "Pause frames on $IFACE (expect RX/TX off; node-setup.sh sets this at boot):"
-ethtool -a "$IFACE" | grep -E '^(RX|TX):'
+for iface in "${IFACES[@]}"; do
+    echo "Pause frames on $iface (expect RX/TX off; node-setup.sh sets this at boot):"
+    ethtool -a "$iface" | grep -E '^(RX|TX):'
+done
+echo
+echo "For the dut's harness: TGEN_MAC=${TGEN_MACS[0]}${TGEN_MACS[1]:+ TGEN_MAC2=${TGEN_MACS[1]}}"
 echo
 echo "Start the TRex server (inside tmux; keep it running; --hdrh gives 1 us latency percentiles):"
 echo "  cd $TREX_DIR && sudo ./t-rex-64 -i -c ${#WORKER_CORES[@]} --no-ofed-check --hdrh"

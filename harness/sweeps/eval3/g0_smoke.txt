@@ -1,0 +1,19 @@
+# Smoke of the 200 Gb/s layout (~12 min), read before the rest: both ports
+# carry traffic (per queue rx (port 0) and (port 1) both filled); 50% and 98%
+# of 2 x 100 Gb/s without loss for privring-128, fill-128 and dyn-128 (if
+# privring-1024 loses at 98% here, it is the doubled working set or PCIe,
+# not the setup: compare its 50% window); latency streams on p0q0-p1q7;
+# the stall line names lcore of p0q3, the target line two lcores (WORK).
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+g0_bal_privring-1024                     privring-1024  -  -  rates=50,98 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_bal_privring-128                      privring-128   -  -  rates=50,98 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_bal_shringfix-8                       shringfix-8    -  -  rates=50,98 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_bal_fill-128                          fill-128       -  -  rates=50,98 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_bal_dyn-128                           dyn-128        -  -  rates=50,98 duration=20 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_heavy_dyn-128                         dyn-128        -  -  rates=98 duration=20 work=48 payload=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_stall_shringfix-8                     shringfix-8    -  -  rates=98 duration=20 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_pv1600_dyn-128                        dyn-128        -  -  rates=98 duration=20 work=2 target=p0q3,p1q3:1600 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g0_trace_fill-128                        fill-128       -  -  rates=98 duration=20 --trace /mydata/trace/mawi-202610141400.json --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

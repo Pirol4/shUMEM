@@ -1,0 +1,40 @@
+# The MAWI trace's load pattern on both ports (f22), plain l3fwd and a NF of
+# 48 reads with payload, n = 3. No STREAM variant: with 16 lcores the NIC's
+# socket has no core left for a hog.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g6_trace_privring-128_n01                privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_fill-128_n01                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_fill-128_n01                    fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-128_n01             privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-1024_n01            privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_privring-1024_n01               privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_dyn-128_n01                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_dyn-128_n01                     dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_shringfix-8_n01              shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g6_trace_fill-128_n02                    fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_shringfix-8_n02              shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_fill-128_n02                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-128_n02             privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_privring-1024_n02               privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_dyn-128_n02                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_dyn-128_n02                     dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-1024_n02            privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_privring-128_n02                privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g6_trace_fill-128_n03                    fill-128       -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_privring-1024_n03               privring-1024  -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_fill-128_n03                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_shringfix-8_n03              shringfix-8    -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-1024_n03            privring-1024  -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_privring-128_n03                privring-128   -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_dyn-128_n03                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace_dyn-128_n03                     dyn-128        -  -  rates=98 duration=60  --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g6_trace48p_privring-128_n03             privring-128   -  -  rates=98 duration=60 work=48 payload=1 --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

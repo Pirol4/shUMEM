@@ -55,17 +55,19 @@ done
 # dropping, which turns loss into lower throughput and hides exactly the
 # difference between receive-ring designs. Both nodes shipped with RX/TX pause
 # on, and ethtool -A does not survive a reboot, hence doing it here.
-EXPERIMENT_SUBNET_PREFIX=10.10.1.
-experiment_iface=$(ip -o -4 addr show | awk -v p="$EXPERIMENT_SUBNET_PREFIX" 'index($4, p) == 1 {print $2}' | head -1)
-if [ -n "$experiment_iface" ]; then
-    if sudo ethtool -A "$experiment_iface" autoneg off rx off tx off 2>/dev/null \
-        || sudo ethtool -A "$experiment_iface" rx off tx off; then
-        echo "node-setup: pause frames off on $experiment_iface"
-    else
-        echo "node-setup: WARNING could not disable pause frames on $experiment_iface" >&2
-    fi
+# Every experiment port: 10.10.1.x, and 10.10.2.x with two links (CLAUDE.md 21).
+experiment_ifaces=$(ip -o -4 addr show | awk '$4 ~ /^10\.10\.[0-9]+\./ {print $2}' | sort -u)
+if [ -n "$experiment_ifaces" ]; then
+    for experiment_iface in $experiment_ifaces; do
+        if sudo ethtool -A "$experiment_iface" autoneg off rx off tx off 2>/dev/null \
+            || sudo ethtool -A "$experiment_iface" rx off tx off; then
+            echo "node-setup: pause frames off on $experiment_iface"
+        else
+            echo "node-setup: WARNING could not disable pause frames on $experiment_iface" >&2
+        fi
+    done
 else
-    echo "node-setup: WARNING no interface in ${EXPERIMENT_SUBNET_PREFIX}0/24; pause frames left as they are" >&2
+    echo "node-setup: WARNING no interface in 10.10.<n>.0/24; pause frames left as they are" >&2
 fi
 
 # --- Interrupts off the forwarding cores -------------------------------------
@@ -73,15 +75,25 @@ fi
 # loss (CLAUDE.md 19.9, 19.12-19.13): the ACPI SCI, twice a second on CPU 1,
 # ~77 us each; and the control NIC's completion interrupts, wherever the SSH
 # flow hashes, 40-140 us a few times a minute. So every interrupt that can be
-# moved goes to the CPUs no run uses: not 1-8 (the l3fwd lcores on dut, the
-# TRex threads on tgen) nor their hyperthreads. Per-CPU and managed interrupts
-# refuse the write and stay.
+# moved goes to the CPUs no run uses: not the lcores (l3fwd's on dut, TRex's
+# on tgen; setup/topology.py: 1-8 on sm110p with one link) nor their
+# hyperthreads. Per-CPU and managed interrupts refuse the write and stay.
+busy_list=$(python3 "$(dirname "$0")/topology.py" busy 2>/dev/null) || busy_list=""
+if [ -z "$busy_list" ]; then
+    echo "node-setup: WARNING setup/topology.py failed; keeping interrupts off CPUs 1-8" >&2
+    busy_list=1-8
+fi
 busy=" "
-for cpu in 1 2 3 4 5 6 7 8; do
-    siblings=/sys/devices/system/cpu/cpu$cpu/topology/thread_siblings_list
-    [ -r "$siblings" ] || continue
-    for sibling in $(tr ',-' '  ' < "$siblings"); do
-        busy="$busy$sibling "
+for range in $(echo "$busy_list" | tr ',' ' '); do
+    for cpu in $(seq "${range%-*}" "${range#*-}"); do
+        siblings=/sys/devices/system/cpu/cpu$cpu/topology/thread_siblings_list
+        if [ -r "$siblings" ]; then
+            for sibling in $(tr ',-' '  ' < "$siblings"); do
+                busy="$busy$sibling "
+            done
+        else
+            busy="$busy$cpu "
+        fi
     done
 done
 housekeeping=""
@@ -102,7 +114,7 @@ if [ -n "$housekeeping" ]; then
     done
     echo "node-setup: $moved interrupts routed to CPUs $housekeeping"
 else
-    echo "node-setup: WARNING no CPU besides 1-8 and their hyperthreads; interrupts left as they are" >&2
+    echo "node-setup: WARNING no CPU besides $busy_list and their hyperthreads; interrupts left as they are" >&2
 fi
 
 echo "node-setup: complete ($allocated hugepages, $HUGEPAGE_MOUNT mounted)"

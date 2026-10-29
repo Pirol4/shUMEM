@@ -49,6 +49,13 @@
 # of l3fwd, idle start-up included, and stops with it:
 #   sudo PCM_LABEL=privring-256_r2 TGEN_MAC=<mac> harness/run_l3fwd.sh privring-256
 #
+# PORTS=2 runs both experiment ports (two links, CLAUDE.md 21): QUEUES queues
+# on each (default: 8 when the NIC's socket has the cores, setup/topology.py),
+# every system per port (shRing: one RMP per port; dyn: one credit pool per
+# port), the tgen MACs as TGEN_MAC (link 1) and TGEN_MAC2 (link 2):
+#   sudo PORTS=2 TGEN_MAC=<mac> TGEN_MAC2=<mac> harness/run_l3fwd.sh dyn-128
+# With one port nothing changes: lcores 1-8, queue q on lcore q+1.
+#
 # The whole output, including the final per-queue counters and the shRing
 # `contention` line, is saved to $RESULTS_DIR/l3fwd_<system>_<timestamp>.log.
 
@@ -61,13 +68,20 @@ SHRING_DIR="${SHRING_DIR:-/mydata/dpdk-research/shring-dpdk}"
 RESULTS_DIR="${RESULTS_DIR:-/mydata/dpdk-research/results}"
 L3FWD="$SHRING_DIR/build/examples/dpdk-l3fwd"
 
-DUT_IP=10.10.1.1
-TGEN_IP=10.10.1.2
+TOPOLOGY="$SCRIPT_DIR/../setup/topology.py"
+PORTS="${PORTS:-1}"
 
-# 8 Rx queues on 8 distinct physical cores (1-8), leaving core 0 to the OS.
-# Queue q is served by lcore q+1.
-CORES=1-8
-NB_QUEUES=8
+# Rx queues on distinct physical cores of the NIC's socket (setup/topology.py):
+# one port, 8 queues on lcores 1-8 with CPU 0 left to the OS; two ports,
+# QUEUES each, port p's queue q on lcore number p * QUEUES + q of the list.
+layout="$(python3 "$TOPOLOGY" --role dut --ports "$PORTS" ${QUEUES:+--queues "$QUEUES"} shell)" \
+    || { echo "ERROR: setup/topology.py failed (message above)" >&2; exit 1; }
+eval "$layout"
+export SHUMEM_HK_CPU          # pcm_memory.sh and pcm_pcie.sh run there
+read -r -a LCORES <<<"$SHUMEM_LCORE_LIST"
+read -r -a LINK_IFACES <<<"$SHUMEM_IFACES"
+read -r -a LINK_PCIS <<<"$SHUMEM_PCIS"
+NB_QUEUES=$SHUMEM_QUEUES
 
 # Mandatory on every system, not only shRing: see CLAUDE.md section 15.1.
 COMMON_DEVARGS="rx_vec_en=0,rxq_cqe_comp_en=0"
@@ -148,10 +162,6 @@ select_system() {
     esac
 }
 
-interface_with_ip() {
-    { ip -o -4 addr show | awk -v ip="$1" '$4 ~ "^"ip"/" {print $2}' | head -1; } || true
-}
-
 learn_neighbor_mac() {
     local iface="$1" ip="$2"
     ping -c 2 -W 1 -I "$iface" "$ip" >/dev/null 2>&1 || true
@@ -159,9 +169,11 @@ learn_neighbor_mac() {
 }
 
 queue_config() {
-    local q config=""
-    for ((q = 0; q < NB_QUEUES; q++)); do
-        config+="(0,$q,$((q + 1))),"
+    local p q config=""
+    for ((p = 0; p < PORTS; p++)); do
+        for ((q = 0; q < NB_QUEUES; q++)); do
+            config+="($p,$q,${LCORES[p * NB_QUEUES + q]}),"
+        done
     done
     echo "${config%,}"
 }
@@ -171,21 +183,42 @@ queue_config() {
 select_system "$SYSTEM"
 [[ -x "$L3FWD" ]] || die "$L3FWD not found; run setup/dev-environment.sh dut first"
 
-IFACE="$(interface_with_ip "$DUT_IP")"
-[[ -n "$IFACE" ]] || die "no interface holds $DUT_IP — is this the dut node?"
-PCI="$(basename "$(readlink -f "/sys/class/net/$IFACE/device")")"
+(( ${#LINK_IFACES[@]} >= PORTS )) || die "no interface holds 10.10.1.1 — is this the dut node?"
 
-# l3fwd rewrites the destination MAC of every forwarded packet to this one.
-# A stale MAC (they change on every re-instantiation) shows up as 100% loss.
-TGEN_MAC="${TGEN_MAC:-$(learn_neighbor_mac "$IFACE" "$TGEN_IP")}"
-# Fails while TRex holds the tgen port: its flow rules keep the ARP request
-# from reaching the tgen kernel. The MAC is the src_mac in tgen's trex_cfg.yaml.
-[[ -n "$TGEN_MAC" ]] || die "could not learn the tgen MAC via $TGEN_IP (TRex running?); run: sudo TGEN_MAC=<mac> $0 $SYSTEM"
+# l3fwd rewrites the destination MAC of every forwarded packet to the tgen's
+# on the same link. A stale MAC (they change on every re-instantiation) shows
+# up as 100% loss. Learning it fails while TRex holds the tgen port (its flow
+# rules keep the ARP request from the tgen kernel): then pass the src_mac of
+# tgen's trex_cfg.yaml, TGEN_MAC for link 1 and TGEN_MAC2 for link 2.
+TGEN_MACS=("${TGEN_MAC:-}" "${TGEN_MAC2:-}")
+for ((link = 0; link < PORTS; link++)); do
+    [[ -n "${TGEN_MACS[link]}" ]] \
+        || TGEN_MACS[link]="$(learn_neighbor_mac "${LINK_IFACES[link]}" "10.10.$((link + 1)).2")"
+    [[ -n "${TGEN_MACS[link]}" ]] || die "could not learn the tgen MAC on link $((link + 1)) via 10.10.$((link + 1)).2 (TRex running?); set $( ((link)) && echo TGEN_MAC2 || echo TGEN_MAC) as in tgen's trex_cfg.yaml"
+done
+
+# DPDK numbers the ports in PCI order, which need not be link order. Port k
+# gets its PCI's link's MAC, so whatever the order, each port sends to the
+# tgen port it is cabled to. When the order is reversed, TRex's link-1 traffic
+# (to 198.18.0.1, l3fwd's route to port 0) leaves on link 2: per-queue counts
+# and totals are unaffected, TRex's per-port counters swap.
+mapfile -t DPDK_PCIS < <(printf '%s\n' "${LINK_PCIS[@]:0:PORTS}" | sort)
+EAL_PORTS=() ETH_DEST=() PCI_LIST=()
+for ((k = 0; k < PORTS; k++)); do
+    for ((link = 0; link < PORTS; link++)); do
+        [[ "${LINK_PCIS[link]}" == "${DPDK_PCIS[k]}" ]] || continue
+        EAL_PORTS+=(-a "${DPDK_PCIS[k]},$DEVARGS")
+        ETH_DEST+=(--eth-dest="$k,${TGEN_MACS[link]}")
+        PCI_LIST+=("${DPDK_PCIS[k]}(link $((link + 1)))")
+    done
+done
+PORT_MASK=$(printf '0x%x' $(( (1 << PORTS) - 1 )))
 
 mkdir -p "$RESULTS_DIR"
 LOG="$RESULTS_DIR/l3fwd_${SYSTEM}_$(date +%Y%m%d-%H%M%S).log"
 
-echo "system=$SYSTEM pci=$PCI devargs=$DEVARGS nb_rxd=$NB_RXD tgen_mac=$TGEN_MAC"
+echo "system=$SYSTEM ports=$PORTS queues=$NB_QUEUES lcores=$SHUMEM_LCORES numa=$SHUMEM_NUMA" \
+     "pci=${PCI_LIST[*]} devargs=$DEVARGS nb_rxd=$NB_RXD tgen_mac=${TGEN_MACS[*]:0:PORTS}"
 echo "log: $LOG"
 
 if [[ -n "${PCM_LABEL:-}" ]]; then
@@ -208,9 +241,9 @@ fi
 # tee -i: Ctrl-C reaches the whole pipeline. Plain tee dies on it at once,
 # while l3fwd only prints its final counters after handling the signal, so
 # without -i the log loses exactly the lines that matter.
-"$L3FWD" -l "$CORES" -n 4 -a "$PCI,$DEVARGS" "${EAL_EXTRA[@]}" -- \
-    -p 0x1 \
+"$L3FWD" -l "$SHUMEM_LCORES" -n 4 "${EAL_PORTS[@]}" "${EAL_EXTRA[@]}" -- \
+    -p "$PORT_MASK" \
     --config="$(queue_config)" \
-    --eth-dest="0,$TGEN_MAC" \
+    "${ETH_DEST[@]}" \
     --nb-rxd="$NB_RXD" \
     2>&1 | tee -i "$LOG"

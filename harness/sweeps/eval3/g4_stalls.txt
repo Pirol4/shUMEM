@@ -1,0 +1,88 @@
+# One lcore stalled 1 ms every 100 ms at 2 x 98 Gb/s, n = 5 (f4): port 0's
+# queue 3 (cold), port 0's hot queue 0 (hot share 0.5 on both ports), and
+# two borrowers. Port 1 is a bystander with its own RMP or pool: its loss
+# says whether anything crosses ports.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g4_hot_privring-1024_n01                 privring-1024  -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_fill-128_n01                      fill-128       -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_shringfix-8_n01                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_shringfix-8_n01                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-128_n01                  privring-128   -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-128_n01                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_fill-128_n01                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_dyn-128_n01                       dyn-128        -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_shringfix-8_n01                   shringfix-8    -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-1024_n01                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-128_n01                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_dyn-128_n01                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-1024_n01                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_fill-128_n01                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_dyn-128_n01                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g4_cold_fill-128_n02                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-1024_n02                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_shringfix-8_n02                   shringfix-8    -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_fill-128_n02                      fill-128       -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-128_n02                  privring-128   -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-1024_n02                 privring-1024  -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-1024_n02                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_dyn-128_n02                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_shringfix-8_n02                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_dyn-128_n02                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_shringfix-8_n02                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-128_n02                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-128_n02                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_dyn-128_n02                       dyn-128        -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_fill-128_n02                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g4_cold_fill-128_n03                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_shringfix-8_n03                   shringfix-8    -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-128_n03                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_fill-128_n03                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-128_n03                  privring-128   -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_shringfix-8_n03                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_fill-128_n03                      fill-128       -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_dyn-128_n03                       dyn-128        -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-1024_n03                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-128_n03                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-1024_n03                 privring-1024  -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_dyn-128_n03                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_dyn-128_n03                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-1024_n03                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_shringfix-8_n03                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+g4_cold_privring-128_n04                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_shringfix-8_n04                   shringfix-8    -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-128_n04                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_fill-128_n04                      fill-128       -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_fill-128_n04                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-1024_n04                 privring-1024  -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_shringfix-8_n04                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_fill-128_n04                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_shringfix-8_n04                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_dyn-128_n04                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_dyn-128_n04                       dyn-128        -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-128_n04                  privring-128   -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-1024_n04                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-1024_n04                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_dyn-128_n04                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+g4_twob_fill-128_n05                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_dyn-128_n05                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_dyn-128_n05                       dyn-128        -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_dyn-128_n05                      dyn-128        -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-1024_n05                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_shringfix-8_n05                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_shringfix-8_n05                   shringfix-8    -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_fill-128_n05                      fill-128       -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_fill-128_n05                     fill-128       -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-1024_n05                privring-1024  -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_twob_privring-128_n05                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-1024_n05                 privring-1024  -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_privring-128_n05                 privring-128   -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_cold_shringfix-8_n05                  shringfix-8    -  -  rates=98 duration=30 stall=p0q3:1000:100 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g4_hot_privring-128_n05                  privring-128   -  -  rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

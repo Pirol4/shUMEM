@@ -11,26 +11,28 @@ packets in proportion to `weights`. Specs:
       log-weights that follow an AR(1) walk, so busy queues stay busy for a
       while and the busiest one changes over time. Same seed, same schedule,
       for every system.
-  switch:<t>:<w0,...,w7>
+  switch:<t>:<w0,...,wN>
       The weights of --queue-weights until t, then these (shRing's Fig. 13:
       a load that turns pathological mid-run).
   <file.json>
       [[t, [w0, ..., w7]], ...], t ascending, the first at 0; or an object
       with those under "steps" (harness/trace/trace_schedule.py).
+Weights have one value per Rx queue: as many as --queue-weights (8 queues per
+port so far; 1, 2, 4 or 8 with two ports, CLAUDE.md 21).
 """
 import json
 import math
 import random
 
-QUEUES = 8
+QUEUES = 8                  # default queue count of a skew schedule
 SKEW_PERIOD_S = 1.0
 SKEW_RATIO = (3.25, 4.33)
 SKEW_PERSISTENCE = 0.8      # AR(1) coefficient of the log-weights
 
 
-def skew_steps(seed, duration, period=SKEW_PERIOD_S, ratio=SKEW_RATIO):
+def skew_steps(seed, duration, period=SKEW_PERIOD_S, ratio=SKEW_RATIO, queues=QUEUES):
     rng = random.Random(seed)
-    logs = [rng.gauss(0, 1) for _ in range(QUEUES)]
+    logs = [rng.gauss(0, 1) for _ in range(queues)]
     steps, t = [], 0.0
     while t < duration - 1e-9:
         target = rng.uniform(*ratio)
@@ -51,7 +53,7 @@ def parse(spec, duration, initial_weights):
         period = float(parts[1]) if len(parts) > 1 else SKEW_PERIOD_S
         ratio = (tuple(float(x) for x in parts[2].split("-")) if len(parts) > 2
                  else SKEW_RATIO)
-        steps = skew_steps(seed, duration, period, ratio)
+        steps = skew_steps(seed, duration, period, ratio, len(initial_weights))
     elif spec.startswith("switch:"):
         _, t, weights = spec.split(":", 2)
         steps = [(0.0, list(initial_weights)),
@@ -72,9 +74,10 @@ def check(steps, initial_weights):
     for (t0, _), (t1, _) in zip(steps, steps[1:]):
         if t1 <= t0:
             raise ValueError("schedule times must increase")
+    queues = len(initial_weights)
     for _, weights in steps:
-        if len(weights) != QUEUES or any(w < 0 for w in weights) or not sum(weights):
-            raise ValueError("schedule weights: %d values >= 0, positive sum" % QUEUES)
+        if len(weights) != queues or any(w < 0 for w in weights) or not sum(weights):
+            raise ValueError("schedule weights: %d values >= 0, positive sum" % queues)
         # A queue with no stream cannot be given traffic later, and a stream
         # cannot be set to 0 pps; the profile's weights fix which exist.
         for w, w0 in zip(weights, initial_weights):
