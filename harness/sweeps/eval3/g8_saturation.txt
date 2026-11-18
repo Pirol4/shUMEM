@@ -1,0 +1,39 @@
+# Near saturation with the heavy NF, without PCM (CLAUDE.md 21.5). g7 put dyn-128's
+# p99.99 above privring-128's at 95-100%, but the tail was one queue, p1q7 on
+# CPU 15, which PCM still interrupts by IPI (21.4); pcm=off removes it. Load:
+# 96 reads + payload at 90-100% in steps of 2, 30 s each, n = 5, the three
+# systems with 128 buffers per queue, order rotated each round. MAWI: the
+# 48-read trace of g6, n = 3. DRAM for these cells is g7's and g6's.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g8_sat_dyn-128_n01                       dyn-128        -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_privring-128_n01                  privring-128   -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_fill-128_n01                      fill-128       -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_dyn-128_n01                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_privring-128_n01             privring-128   -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_fill-128_n01                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g8_sat_privring-128_n02                  privring-128   -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_fill-128_n02                      fill-128       -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_dyn-128_n02                       dyn-128        -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_privring-128_n02             privring-128   -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_fill-128_n02                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_dyn-128_n02                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g8_sat_fill-128_n03                      fill-128       -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_dyn-128_n03                       dyn-128        -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_privring-128_n03                  privring-128   -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_fill-128_n03                 fill-128       -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_dyn-128_n03                  dyn-128        -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_trace48p_privring-128_n03             privring-128   -  -  rates=98 duration=60 work=48 payload=1 pcm=off --trace /mydata/trace/mawi-202610141400.json --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 4
+g8_sat_dyn-128_n04                       dyn-128        -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_privring-128_n04                  privring-128   -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_fill-128_n04                      fill-128       -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 5
+g8_sat_privring-128_n05                  privring-128   -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_fill-128_n05                      fill-128       -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g8_sat_dyn-128_n05                       dyn-128        -  -  rates=90,92,94,96,98,100 duration=30 work=96 payload=1 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

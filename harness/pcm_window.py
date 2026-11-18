@@ -15,10 +15,21 @@ import csv
 import sys
 import time
 
-# pcm-memory -nc -csv: two header rows, then Date, Time, ..., and the System
-# Read and Write totals in columns 12 and 13 (CLAUDE.md 17.1).
-DATE_COL, TIME_COL, READ_COL, WRITE_COL = 0, 1, 11, 12
+# pcm-memory -nc -csv: two header rows (socket, then metric), then Date, Time,
+# five columns per socket and the System totals. The System Read and Write
+# columns move with the socket count -- 11 and 12 (0-based) with one socket
+# (CLAUDE.md 17.1), 16 and 17 with two (21.5) -- so they are found by name.
+DATE_COL, TIME_COL = 0, 1
 HEADER_ROWS = 2
+
+
+def system_columns(header):
+    """0-based (read, write) columns of the System Read / Write totals."""
+    names = {(a.strip(), b.strip()): i for i, (a, b) in enumerate(zip(*header))}
+    try:
+        return names[("System", "Read")], names[("System", "Write")]
+    except KeyError:
+        sys.exit("pcm_window: no System Read/Write columns in the CSV header")
 
 
 def sample_epoch(date, clock):
@@ -30,11 +41,12 @@ def sample_epoch(date, clock):
 
 def window_samples(path, start, end):
     with open(path, newline="") as f:
-        rows = list(csv.reader(f))[HEADER_ROWS:]
-    for row in rows:
+        rows = list(csv.reader(f))
+    read_col, write_col = system_columns(rows[:HEADER_ROWS])
+    for row in rows[HEADER_ROWS:]:
         try:
             t = sample_epoch(row[DATE_COL].strip(), row[TIME_COL].strip())
-            read, write = float(row[READ_COL]), float(row[WRITE_COL])
+            read, write = float(row[read_col]), float(row[write_col])
         except (IndexError, ValueError):
             continue    # a partial last line when PCM is stopped mid-write
         if start <= t <= end:

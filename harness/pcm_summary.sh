@@ -14,15 +14,28 @@ set -euo pipefail
 EXP_DIR="${EXP_DIR:-/mydata/exp}"
 LOADED_MB_S="${LOADED_MB_S:-20}"
 
-# Columns 12 and 13 are the System Read and Write totals of pcm-memory -nc -csv.
+# The System Read and Write totals of pcm-memory -nc -csv, found by name in
+# the two header rows: columns 12 and 13 with one socket, 17 and 18 with two
+# (CLAUDE.md 21.5).
 summarize() {
     awk -F, -v label="$1" -v loaded="$LOADED_MB_S" '
-        NR > 2 && $13 > loaded {
-            n++; read += $12; write += $13
-            if (min == "" || $13 < min) min = $13
-            if ($13 > max) max = $13
+        NR == 1 { for (i = 1; i <= NF; i++) skt[i] = $i; next }
+        NR == 2 {
+            for (i = 1; i <= NF; i++) {
+                m = $i; gsub(/^ +| +$/, "", m)
+                if (skt[i] == "System" && m == "Read") rc = i
+                if (skt[i] == "System" && m == "Write") wc = i
+            }
+            if (!rc || !wc) { printf "%-16s no System Read/Write columns\n", label; bad = 1; exit }
+            next
+        }
+        $wc > loaded {
+            n++; read += $rc; write += $wc
+            if (min == "" || $wc < min) min = $wc
+            if ($wc > max) max = $wc
         }
         END {
+            if (bad) exit
             if (n == 0) { printf "%-16s no loaded samples\n", label; exit }
             printf "%-16s n=%3d  read=%8.1f  write=%8.1f  (write min=%.1f max=%.1f) MB/s\n",
                    label, n, read / n, write / n, min, max

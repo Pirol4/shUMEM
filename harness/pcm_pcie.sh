@@ -27,6 +27,16 @@ mkdir -p "$EXP_DIR"
 CSV="$EXP_DIR/pcm-pcie_$LABEL.csv"
 [[ -e "$CSV" ]] && die "$CSV exists; move it away or pick another label"
 
+# PCM moves itself, every sample, onto the last CPU of each socket to read
+# that socket's uncore ("speedup trick"). When that CPU is one of the run's
+# polling lcores (sm220u, NIC on socket 0: p1q7 on CPU 15) the move preempts
+# the queue for up to ~190 us and it drops packets; the patched PCM
+# (setup/pcm-speedup-affinity.patch) then stays put and reads by IPI
+# (CLAUDE.md 21.4). One port on sm110p: CPU 15 is no lcore, nothing changes.
+for cpulist in /sys/devices/system/node/node[0-9]*/cpulist; do
+    last="$(tr ',' '\n' <"$cpulist" | tail -1)"
+    [[ " ${SHUMEM_LCORE_LIST:-} " != *" ${last##*-} "* ]] || export PCM_NO_SPEEDUP_AFFINITY=1
+done
 echo "pcm-pcie: recording to $CSV — start the traffic in ~10 s, Ctrl-C when it ends"
 # 1 s samples, extended events (-e). Pinned to the first
 # housekeeping CPU (SHUMEM_HK_CPU from run_l3fwd.sh, setup/topology.py; CPU 0

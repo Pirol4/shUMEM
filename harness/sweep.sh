@@ -22,6 +22,9 @@
 #   cache=<n>                l3fwd's per-lcore mempool cache (default 256,
 #                            0 = none): every get/put through the common ring
 #   pcm=pcie                 record pcm-pcie (DDIO) instead of pcm-memory
+#   pcm=off                  record nothing: PCM's reads still interrupt the
+#                            socket's last CPU (CLAUDE.md 21.4-21.5), so tail
+#                            latency there is measured without it
 #   ops=<driver>             l3fwd's mempool driver (ring_mp_mc, stack, lf_stack)
 #   groups=<G>               G mbuf pools (l3fwd) and, for dyn-*, G credit pools
 #   reserve=<R>              dyn-* credit pool reserve (default 0 since fork
@@ -389,7 +392,8 @@ summarize() {
                      printf "   cycles/pkt over %.0f pkts: rx %.1f  fwd %.1f  common-ring objects/pkt %.5f\n",
                             n, rx / n, fw / n, ring / n
              }' "$out"
-        "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
+        # pcm=off (run_one's local, visible here): nothing to summarize.
+        [[ "${pcm:-}" == off ]] || "$SCRIPT_DIR/pcm_summary.sh" "$label" 2>&1 | sed 's/^/   /' || true
         dram_per_window "$label" "$duration" | sed 's/^/   /' || true
         [[ ! -s "$OUT_DIR/$label.stall" ]] || tail -1 "$OUT_DIR/$label.stall" | sed 's/^/   stall_core: /'
         # stress-ng's metrics line; its format varies by version, so take
@@ -417,7 +421,7 @@ run_one() {
                         [[ "$stall" =~ ^(p[0-9]+q)?[0-9]+:[0-9]+:[0-9.]+$ ]] || die "$label: bad $arg, want stall=<core|p<port>q<queue>>:<us>:<ms>"
                         stall="$(resolve_lcores "${stall%%:*}"):${stall#*:}" || die "$label: $arg" ;;
             pcm=*)      pcm="${arg#pcm=}"
-                        [[ "$pcm" == memory || "$pcm" == pcie ]] || die "$label: bad $arg, want pcm=memory|pcie" ;;
+                        [[ "$pcm" == memory || "$pcm" == pcie || "$pcm" == off ]] || die "$label: bad $arg, want pcm=memory|pcie|off" ;;
             ops=*)      ops="${arg#ops=}"
                         [[ "$ops" =~ ^[a-z_]+$ ]] || die "$label: bad $arg" ;;
             groups=*)   groups="${arg#groups=}"
@@ -452,7 +456,7 @@ run_one() {
     [[ "$window" == - ]] || env_args+=("FILL_WINDOW_MS=$window")
     [[ "$headroom" == - ]] || env_args+=("FILL_HEADROOM=$headroom")
     [[ -z "$cache" ]] || env_args+=("L3FWD_MEMPOOL_CACHE=$cache")
-    env_args+=("PCM_TOOL=$pcm")
+    [[ "$pcm" == off ]] || env_args+=("PCM_TOOL=$pcm")
     [[ -z "$ops" ]] || env_args+=("L3FWD_MEMPOOL_OPS=$ops")
     [[ -z "$groups" ]] || env_args+=("L3FWD_MEMPOOL_GROUPS=$groups" "FILL_GROUPS=$groups")
     [[ -z "$reserve" ]] || env_args+=("FILL_RESERVE=$reserve")
@@ -470,7 +474,10 @@ run_one() {
     # Append mode for every writer of $out: l3fwd's final counters would
     # otherwise land at its own file offset, over rate_sweep's lines.
     : >"$out"
-    sudo -n env PCM_LABEL="$label" TGEN_MAC="$TGEN_MAC" "${env_args[@]}" \
+    # An empty PCM_LABEL starts no PCM (run_l3fwd.sh).
+    local pcm_label="$label"
+    [[ "$pcm" != off ]] || pcm_label=""
+    sudo -n env PCM_LABEL="$pcm_label" TGEN_MAC="$TGEN_MAC" "${env_args[@]}" \
         "$SCRIPT_DIR/run_l3fwd.sh" "$system" >>"$out" 2>&1 &
     L3FWD_PID=$!
 

@@ -78,6 +78,7 @@ layout="$(python3 "$TOPOLOGY" --role dut --ports "$PORTS" ${QUEUES:+--queues "$Q
     || { echo "ERROR: setup/topology.py failed (message above)" >&2; exit 1; }
 eval "$layout"
 export SHUMEM_HK_CPU          # pcm_memory.sh and pcm_pcie.sh run there
+export SHUMEM_LCORE_LIST      # ... and keep off these (PCM_NO_SPEEDUP_AFFINITY)
 read -r -a LCORES <<<"$SHUMEM_LCORE_LIST"
 read -r -a LINK_IFACES <<<"$SHUMEM_IFACES"
 read -r -a LINK_PCIS <<<"$SHUMEM_PCIS"

@@ -250,15 +250,33 @@ build_dpdk_tree "$VANILLA_DIR" "vanilla DPDK v21.05"
 
 if [[ "$ROLE" == "dut" ]]; then
     section "Building Intel PCM (LLC / memory-bandwidth counters)"
-    if [[ -x "$PCM_DIR/build/bin/pcm" ]]; then
-        log "PCM already built (skipping)."
+    # PCM is a measurement tool, not a baseline, so it tracks upstream
+    # rather than being pinned to a commit like the DPDK trees.
+    if [[ ! -d "$PCM_DIR/.git" ]]; then
+        log "Cloning Intel PCM into $PCM_DIR"
+        git clone --recursive https://github.com/intel/pcm.git "$PCM_DIR"
+    fi
+    # One patch (CLAUDE.md 21.4): PCM_NO_SPEEDUP_AFFINITY keeps PCM off the
+    # last CPU of each socket, a polling lcore when the NIC socket is full of
+    # lcores. Without the variable PCM behaves as upstream, so the patch is
+    # applied on every node; harness/pcm_*.sh set it only where it matters.
+    pcm_rebuild=0
+    if grep -q SpeedupThreadAffinity "$PCM_DIR/src/utils.h"; then
+        log "PCM speedup-affinity patch already applied."
+    elif patch -d "$PCM_DIR" -p1 --forward --dry-run -s <"$SCRIPT_DIR/pcm-speedup-affinity.patch" >/dev/null; then
+        patch -d "$PCM_DIR" -p1 --forward -s <"$SCRIPT_DIR/pcm-speedup-affinity.patch"
+        log "PCM speedup-affinity patch applied."
+        pcm_rebuild=1
     else
-        # PCM is a measurement tool, not a baseline, so it tracks upstream
-        # rather than being pinned to a commit like the DPDK trees.
-        if [[ ! -d "$PCM_DIR/.git" ]]; then
-            log "Cloning Intel PCM into $PCM_DIR"
-            git clone --recursive https://github.com/intel/pcm.git "$PCM_DIR"
-        fi
+        log "WARNING: setup/pcm-speedup-affinity.patch does not apply to this PCM (upstream moved);"
+        log "         PCM_NO_SPEEDUP_AFFINITY will be ignored — redo the patch (CLAUDE.md 21.4)."
+    fi
+    if [[ -x "$PCM_DIR/build/bin/pcm" && "$pcm_rebuild" == 0 ]]; then
+        log "PCM already built (skipping)."
+    elif [[ -x "$PCM_DIR/build/bin/pcm" ]]; then
+        ( cd "$PCM_DIR/build" && cmake --build . --parallel "$(nproc)" --target pcm-memory pcm-pcie )
+        log "pcm-memory and pcm-pcie rebuilt with the patch."
+    else
         ( cd "$PCM_DIR" && mkdir -p build && cd build && cmake .. && cmake --build . --parallel "$(nproc)" )
         log "PCM build complete: $PCM_DIR/build"
     fi
@@ -326,6 +344,8 @@ done
 if [[ "$ROLE" == "dut" ]]; then
     if [[ -x "$PCM_DIR/build/bin/pcm" ]]; then
         echo "  OK    $PCM_DIR (PCM)"
+        grep -q SpeedupThreadAffinity "$PCM_DIR/src/utils.h" \
+            || echo "  WARNING  PCM without setup/pcm-speedup-affinity.patch (CLAUDE.md 21.4)"
     else
         echo "  MISSING  $PCM_DIR (PCM)"
     fi

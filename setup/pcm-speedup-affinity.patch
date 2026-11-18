@@ -1,0 +1,206 @@
+shUMEM (CLAUDE.md 21.4): let PCM skip its per-socket "speedup trick".
+
+PCM moves its own thread, on every sample, onto socketRefCore[s] (the last
+CPU of socket s) before reading that socket's uncore MSRs. On sm220u with the
+NIC on socket 0 that CPU is an isolated polling lcore (p1q7), so each sample
+preempted it for up to ~190 us. With PCM_NO_SPEEDUP_AFFINITY set the thread
+stays on its housekeeping CPU and the reads reach the core by IPI; without it
+PCM behaves as upstream. Made against intel/pcm 8574a1f; applied with
+patch -p1 by setup/dev-environment.sh dut.
+
+diff --git a/src/cpucounters.cpp b/src/cpucounters.cpp
+index 943bfa0..5780188 100644
+--- a/src/cpucounters.cpp
++++ b/src/cpucounters.cpp
+@@ -4081,7 +4081,7 @@ PCM::ErrorCode PCM::program(const PCM::ProgramMode mode_, const void * parameter
+ 
+         std::packaged_task<void()> task([this, i, mode_, pExtDesc, &programmingStatuses, &tids]() -> void
+             {
+-                TemporalThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
++                SpeedupThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
+ 
+                 programmingStatuses[i] = programCoreCounters(i, mode_, pExtDesc, lastProgrammedCustomCounters[i], tids);
+             });
+@@ -4134,7 +4134,7 @@ PCM::ErrorCode PCM::program(const PCM::ProgramMode mode_, const void * parameter
+         for (int i = 0; i < (int)num_cores; ++i)
+         {
+             if (isCoreOnline(i) == false) continue;
+-            TemporalThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
++            SpeedupThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
+             programNehalemEPUncore(i);
+         }
+     }
+@@ -4143,7 +4143,7 @@ PCM::ErrorCode PCM::program(const PCM::ProgramMode mode_, const void * parameter
+         for (int i = 0; i < (int)num_cores; ++i)
+         {
+             if (isCoreOnline(i) == false) continue;
+-            TemporalThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
++            SpeedupThreadAffinity tempThreadAffinity(i, false); // speedup trick for Linux
+             programBecktonUncore(i);
+         }
+     }
+@@ -5565,7 +5565,7 @@ uint64 PCM::getInvariantTSC_Fast(uint32 core)
+ {
+     if (supportsRDTSCP())
+     {
+-        TemporalThreadAffinity aff(core);
++        SpeedupThreadAffinity aff(core); // shUMEM: TSC is invariant, any core reads it
+         return RDTSCP();
+     }
+     else if (core < MSR.size())
+@@ -5720,7 +5720,7 @@ void BasicCounterState::readAndAggregate(std::shared_ptr<SafeMsrHandle> msr)
+     uint64 cBrMispredSlots = 0;
+     uint64 cHeavyOpsSlots = 0;
+     const int32 core_id = msr->getCoreId();
+-    TemporalThreadAffinity tempThreadAffinity(core_id); // speedup trick for Linux
++    SpeedupThreadAffinity tempThreadAffinity(core_id); // speedup trick for Linux
+ 
+     PCM * m = PCM::getInstance();
+     assert(m);
+@@ -6561,7 +6561,7 @@ void PCM::freezeServerUncoreCounters()
+         serverUncorePMUs[i]->freezeCounters();
+ 
+         const auto refCore = socketRefCore[i];
+-        TemporalThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
++        SpeedupThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
+ 
+         forAllUncorePMUs(i, PCU_PMU_ID, [](UncorePMU& pmu) { pmu.freeze(UNC_PMON_UNIT_CTL_FRZ_EN); });
+ 
+@@ -6602,7 +6602,7 @@ void PCM::unfreezeServerUncoreCounters()
+         serverUncorePMUs[i]->unfreezeCounters();
+ 
+         const auto refCore = socketRefCore[i];
+-        TemporalThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
++        SpeedupThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
+ 
+         forAllUncorePMUs(i, PCU_PMU_ID, [](UncorePMU& pmu) { pmu.unfreeze(UNC_PMON_UNIT_CTL_FRZ_EN); });
+ 
+@@ -6639,7 +6639,7 @@ void PCM::unfreezeServerUncoreCounters()
+ void UncoreCounterState::readAndAggregate(std::shared_ptr<SafeMsrHandle> msr)
+ {
+     const auto coreID = msr->getCoreId();
+-    TemporalThreadAffinity tempThreadAffinity(coreID); // speedup trick for Linux
++    SpeedupThreadAffinity tempThreadAffinity(coreID); // speedup trick for Linux
+ 
+     auto pcm = PCM::getInstance();
+     pcm->readAndAggregatePackageCStateResidencies(msr, *this);
+@@ -6828,7 +6828,7 @@ void PCM::readAndAggregateUncoreMCCounters(const uint32 socket, CounterStateType
+     else
+     {
+         std::shared_ptr<SafeMsrHandle> msr = MSR[socketRefCore[socket]];
+-        TemporalThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
++        SpeedupThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
+         switch (cpu_family_model)
+         {
+             case PCM::WESTMERE_EP:
+@@ -7092,7 +7092,7 @@ void PCM::readQPICounters(SystemCounterState & result)
+ 
+                 if (!SocketProcessed[s])
+                 {
+-                    TemporalThreadAffinity tempThreadAffinity(core); // speedup trick for Linux
++                    SpeedupThreadAffinity tempThreadAffinity(core); // speedup trick for Linux
+ 
+                     // incoming data responses from QPI link 0
+                     MSR[core]->read(R_MSR_PMON_CTR1, &(result.incomingQPIPackets[s][0]));
+@@ -7132,7 +7132,7 @@ void PCM::readQPICounters(SystemCounterState & result)
+ 
+                 for (int s = 0; s < 2; ++s)
+                 {
+-                    TemporalThreadAffinity tempThreadAffinity(SCore[s]); // speedup trick for Linux
++                    SpeedupThreadAffinity tempThreadAffinity(SCore[s]); // speedup trick for Linux
+ 
+                     MSR[SCore[s]]->read(MSR_UNCORE_PMC0, &Total_Writes[s]);
+                     MSR[SCore[s]]->read(MSR_UNCORE_PMC1, &Total_Reads[s]);
+@@ -7685,7 +7685,7 @@ ServerUncoreCounterState PCM::getServerUncoreCounterState(uint32 socket)
+     if (MSR.size())
+     {
+         uint32 refCore = socketRefCore[socket];
+-        TemporalThreadAffinity tempThreadAffinity(refCore);
++        SpeedupThreadAffinity tempThreadAffinity(refCore); // shUMEM
+ 
+         readUncoreCounterValues(result, socket);
+ 
+@@ -10855,7 +10855,7 @@ void PCM::programIIOCounters(uint64 rawEvents[4], int IIOStack)
+     for (int32 i = 0; (i < num_sockets) && MSR.size() && iioPMUs.size(); ++i)
+     {
+         uint32 refCore = socketRefCore[i];
+-        TemporalThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
++        SpeedupThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
+ 
+         for (const auto & unit: IIO_units)
+         {
+@@ -10891,7 +10891,7 @@ void PCM::programIRPCounters(uint64 rawEvents[4], int IIOStack)
+     for (int32 i = 0; (i < num_sockets) && MSR.size() && irpPMUs.size(); ++i)
+     {
+         uint32 refCore = socketRefCore[i];
+-        TemporalThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
++        SpeedupThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
+ 
+         for (const auto& unit : IIO_units)
+         {
+@@ -11262,7 +11262,7 @@ uint64 PCM::getUncoreCounterState(const int pmu_id, const size_t socket, const u
+     {
+         for (size_t die = 0; die < uncorePMUs[socket].size(); ++die)
+         {
+-            TemporalThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
++            SpeedupThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
+             const auto pmusIter = uncorePMUs[socket][die].find(pmu_id);
+             if (pmusIter != uncorePMUs[socket][die].end())
+             {
+@@ -11744,7 +11744,7 @@ IIOCounterState PCM::getIIOCounterState(int socket, int IIOStack, int counter)
+ void PCM::getIIOCounterStates(int socket, int IIOStack, IIOCounterState * result)
+ {
+     uint32 refCore = socketRefCore[socket];
+-    TemporalThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
++    SpeedupThreadAffinity tempThreadAffinity(refCore); // speedup trick for Linux
+ 
+     for (int c = 0; c < 4; ++c) {
+         result[c] = getIIOCounterState(socket, IIOStack, c);
+diff --git a/src/cpucounters.h b/src/cpucounters.h
+index 5818dc7..56801d5 100644
+--- a/src/cpucounters.h
++++ b/src/cpucounters.h
+@@ -796,7 +796,7 @@ private:
+             result.Counters.resize(uncorePMUs[socket].size());
+             for (size_t die = 0; die < uncorePMUs[socket].size(); ++die)
+             {
+-                TemporalThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
++                SpeedupThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
+ 
+                 for (auto pmuIter = uncorePMUs[socket][die].begin(); pmuIter != uncorePMUs[socket][die].end(); ++pmuIter)
+                 {
+@@ -827,7 +827,7 @@ private:
+         {
+             for (size_t die = 0; die < uncorePMUs[socket].size(); ++die)
+             {
+-                TemporalThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
++                SpeedupThreadAffinity tempThreadAffinity(socketRefCore[socket]); // speedup trick for Linux
+ 
+                 for (size_t unit = 0; unit < uncorePMUs[socket][die][pmu_id].size(); ++unit)
+                 {
+diff --git a/src/utils.h b/src/utils.h
+index 1707ba8..70d6e04 100644
+--- a/src/utils.h
++++ b/src/utils.h
+@@ -832,5 +832,21 @@ public:
+ #endif
+ };
+ 
++// shUMEM (CLAUDE.md 21): with PCM_NO_SPEEDUP_AFFINITY set, the per-socket
++// "speedup trick" does not migrate the thread to the socket reference core
++// (the last CPU of the socket, an isolated polling lcore when the NIC socket
++// is full of lcores); the MSR reads then reach that CPU by a short IPI.
++class SpeedupThreadAffinity
++{
++    std::unique_ptr<TemporalThreadAffinity> aff;
++public:
++    SpeedupThreadAffinity(uint32 core_id, bool checkStatus = true)
++    {
++        static const bool skip = std::getenv("PCM_NO_SPEEDUP_AFFINITY") != nullptr;
++        if (!skip) aff.reset(new TemporalThreadAffinity(core_id, checkStatus));
++    }
++};
++
++
+ 
+ } // namespace pcm

@@ -1704,7 +1704,7 @@ Not replicated, on purpose: MICA (an application, outside Rx in DPDK), netperf (
 
 1. CloudLab: **Update the profile**, instantiate; on both nodes `git -C /local/repository log --oneline -1` must show this commit or later (else `sudo git -C /local/repository fetch origin && sudo git -C /local/repository checkout -B main origin/main`). Dut without `/mydata`: `sudo mkdir -p /mydata`.
 2. `sudo setup/dev-environment.sh dut` / `… tgen`; `sudo setup/trex-setup.sh` on the tgen. On nodes set up before this commit instead: tgen `sudo pip3 install hdrhistogram`; dut `sudo apt-get install -y stress-ng` and `sudo git -C /mydata/dpdk-research/shring-dpdk pull && sudo ninja -C /mydata/dpdk-research/shring-dpdk/build`.
-3. dut: `sudo setup/kernel-tuning.sh && sudo reboot`; after the boot re-check `/local/repository` (CloudLab resets it, 19.26), rerun `sudo /local/repository/setup/node-setup.sh` if it was reset, then `setup/kernel-tuning.sh --check`.
+3. dut: `sudo setup/kernel-tuning.sh && sudo reboot`; after the boot re-check `/local/repository` (CloudLab resets it, 19.26), rerun `sudo /local/repository/setup/node-setup.sh` if it was reset (with the NIC on socket 0 it must print "tasks moved" and "periodic ACPI gpe6C disabled", §21.4), then `setup/kernel-tuning.sh --check`.
 4. Both: `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp`; dut key in the tgen's `~/.ssh/authorized_keys2`; note `TGEN_MAC` and `TGEN_HOST`.
 5. tgen, tmux: `cd /mydata/trex/v3.07 && sudo ./t-rex-64 -i -c 6 --no-ofed-check --hdrh`.
 6. dut, tmux, own user: `TGEN_HOST=… TGEN_MAC=… harness/run_eval.sh f0`; check its summary against the header of `f0_smoke.txt`; then `… harness/run_eval.sh all2`. Interrupted? Run the same command again: it resumes.
@@ -2024,7 +2024,7 @@ What we have instead, and why it has no dirty zero:
 
 ---
 
-## 21\. 200 Gb/s on sm220u: two ports, prepared 2026-10-29 (nothing run on a node yet)
+## 21\. 200 Gb/s on sm220u: two ports, prepared 2026-10-29, first run 2026-11-17
 
 The advisor asked for a test at 200 Gb/s. CloudLab's hardware page (read 2026-10-29) has no node with a single 200 Gb/s port that fits this project: `d7525`/`d8545` (Wisconsin) list "one port at 200Gb" next to "dual-port 100Gb" (inconsistent), and they are AMD EPYC 7302 / 7413 — no Intel DDIO, no Intel PCM, GPU nodes in demand. **Chosen: `sm220u`** (Wisconsin, 10 nodes): 2 × Xeon Silver 4314 (the sm110p CPU, two sockets, 32 cores), the same ConnectX-6 Dx 2 × 100 Gb with **both ports for experiments**. Two 100 Gb/s links give 200 Gb/s, exactly the rxBisect paper's load (its "200 Gbps" is two 100 Gb/s NICs, 8 cores each). Same NIC, driver, CPU and DDIO as every number so far; the second socket also gives the cores (8 per port) and is what rxBisect's emulator would need (§20.22). `sm110p` has both ports for experiments too, but 15 usable cores fit only 4 queues per port.
 
@@ -2055,8 +2055,88 @@ The advisor asked for a test at 200 Gb/s. CloudLab's hardware page (read 2026-10
 ### 21.3 Runbook (sm220u, two links)
 
 1. CloudLab: **Update** the profile from the repository, reserve 2 × sm220u, instantiate with hardware type `sm220u` and experiment links `2`. On both nodes check `git -C /local/repository log --oneline -1` (fix a stale checkout with `sudo git -C /local/repository fetch origin && sudo git -C /local/repository checkout -B main origin/main`), then `python3 /local/repository/setup/topology.py report`: `ports 2`, the NIC's `numa`, `lcores` (expect 16-31 or 0-15) and `queues 8`.
-2. Both: `sudo /local/repository/setup/dev-environment.sh dut|tgen` (fork `fill-ring` at `9edbb327b` or later); `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp`.
+2. Both: if the node has no `/mydata` blockstore (the dut had none on 2026-11-17), `sudo mkdir -p /mydata` first; then `sudo /local/repository/setup/dev-environment.sh dut|tgen` (fork `fill-ring` at `9edbb327b` or later; on the dut it also applies `setup/pcm-speedup-affinity.patch`, §21.4); `sudo mkdir -p /mydata/exp && sudo chown $USER /mydata/exp` (and `/mydata/trace` on the tgen, for `fetch_mawi.sh`).
 3. tgen: `sudo /local/repository/setup/trex-setup.sh` (pings 10.10.1.1 and 10.10.2.1; note `TGEN_MAC` and `TGEN_MAC2`), TRex in tmux with the printed command (`-c 12 --hdrh`); `harness/trace/fetch_mawi.sh` for g0/g6; dut's ssh key in the tgen's `~/.ssh/authorized_keys2`.
-4. dut: `sudo /local/repository/setup/kernel-tuning.sh`, `sudo reboot`, re-check `/local/repository` (CloudLab resets it on reboot, §19.26) and run `sudo /local/repository/setup/node-setup.sh` if it was reset, then `setup/kernel-tuning.sh --check`.
+4. dut: `sudo /local/repository/setup/kernel-tuning.sh`, `sudo reboot`, re-check `/local/repository` (CloudLab resets it on reboot, §19.26) and run `sudo /local/repository/setup/node-setup.sh` if it was reset (with the NIC on socket 0 it must print "tasks moved" and "periodic ACPI gpe6C disabled", §21.4), then `setup/kernel-tuning.sh --check`.
 5. dut, tmux, own user, from `/local/repository`: `TGEN_HOST=<tgen control name> TGEN_MAC=<mac> TGEN_MAC2=<mac2> harness/run_eval.sh g0`; read `/mydata/exp/sweep/summary.txt` (both ports' queues filled; privring-128 / fill-128 / dyn-128 without loss at 2 × 98%; the stall on the lcore of p0q3; `WORK` naming two target lcores). If privring-1024 loses at 98% but not at 50%, that is the doubled working set or PCIe — a result, not a setup error; compare with the others.
 6. Then `KEEP_GOING=1 TGEN_HOST=… TGEN_MAC=… TGEN_MAC2=… harness/run_eval.sh all3` (~7.4 h); copy `/mydata/exp` from both nodes and `/mydata/dpdk-research/results` from the dut before ending.
+
+### 21.4 First run, and CPU 0 as a polling lcore (2026-11-17)
+
+Instantiated: dut `sm220u-10s10537`, tgen `sm220u-10s10639` (Wisconsin). The NIC sits on **socket 0**, so the topology gives lcores **0-15 including CPU 0** (p0q0-7 on 0-7, p1q0-7 on 8-15), housekeeping 16-31 (hk CPU 16), no hog CPUs — the one case §21.2 listed as untested. Ubuntu 5.15.0, `isolcpus=domain,managed_irq,0-15 irqaffinity=16-31 nosmt`. SMI count 0 throughout.
+
+**g0 passed its own checks** (2 × 98% carried at 16.1 Mpps of 1500 B, equal per queue on both ports; stall on p0q3; `WORK` on lcores 3 and 11) **but the 128-buffer systems lost packets on exactly two queues**: ~1.8 k per 20 s on p0q0 (CPU 0) and p1q7 (CPU 15), occupancy max 96-271 there against ~10 elsewhere — off-CPU pauses longer than 128 buffers last at 8.2 Mpps per port (~140 us). `perf record -C 0,3,15` (sched_switch, irq, workqueue, IPI, TLB; diagnosis in dut `/mydata/exp_diag`) found two causes, neither present with one port on sm110p, where CPU 0 and the socket's last CPU are not lcores:
+
+- **CPU 15 — PCM.** On every sample `pcm-memory` moves its thread onto `socketRefCore[s]`, the last CPU of each socket (`cpucounters.cpp`, "speedup trick" `TemporalThreadAffinity`, plus unlabeled ones in `getInvariantTSC_Fast` and `getServerUncoreCounterState`), to read that socket's uncore MSRs locally. CPU 15 is p1q7's lcore: 29 pauses > 100 us per 30 s, max 192 us. `taskset` on PCM does not help (the migration sets its own affinity).
+- **CPU 0 — firmware and boot leftovers.** ACPI GPE 0x6C (SSDT "SpsNm", Intel SPS Node Manager: `_L6C` talks to the ME over HECI-2) fires twice a second, and the kernel runs the GPE's deferred work (`acpi_os_execute_deferred`, kacpid) **always on CPU 0**: 30 pauses > 100 us per 30 s, max 177 us. Plus kernel threads that boot left on CPU 0 and isolcpus=domain never moves: jbd2 and kblockd (this dut's `/mydata` is a plain directory on the root disk; max 608 us), rcu_sched, kcompactd; and the unbound tasks with affinity 0-31.
+
+**Fixes** (the second-socket-free layout, where CPU 0 and the socket's last CPU are lcores; with one port nothing changes):
+
+- `setup/node-setup.sh`, only when CPU 0 is isolated: every task that accepts it goes to the housekeeping CPUs (per-CPU kthreads refuse — expected; 35 moved on this dut, including kthreadd, so later kthreads start there too), `vm.compaction_proactiveness=0`, `kernel.numa_balancing=0`, and every ACPI GPE that fires during 3 s of idle is disabled (only gpe6C here; undo with `echo enable`, a reboot restores it). Power capping by the Node Manager is then off; nothing in the testbed uses it.
+- `setup/pcm-speedup-affinity.patch` (applied by `dev-environment.sh dut`, against intel/pcm `8574a1f`): every "speedup trick" becomes `SpeedupThreadAffinity`, which with `PCM_NO_SPEEDUP_AFFINITY` set does not migrate; the MSR reads then reach the reference core by IPI (`rdmsr_on_cpu`). `harness/pcm_memory.sh` and `pcm_pcie.sh` set the variable only when the last CPU of some socket is one of the run's lcores (`SHUMEM_LCORE_LIST`, now exported by `run_l3fwd.sh`). The DRAM numbers do not change (the reads are the same registers): privring-1024 writes 20.45 GB/s before and 20.22 after (g0, read with the fixed parser of 21.5); dyn-128 811 → 297 MB/s, because without the pauses its p0q0 and p1q7 no longer grow.
+
+Measured on privring-128, 2 × 98%, 60 s, all queues probed at 10 kpps (dut `/mydata/exp_diag`):
+
+| | lost / 60 s | p0q0 | p1q7 |
+|---|---|---|---|
+| as instantiated | 10,312 | lossy | lossy |
+| + kernel fixes | 3,197 | 0, p99.99 63 us | lossy |
+| + PCM patch | **178**, all on p1q7 | 0 | 178 |
+
+The residual is PCM's IPIs themselves: ~112 MSR-read IPIs to CPU 15 in ~820 us bursts, ~1.7 bursts/s. It stays as long as PCM reads socket 0's uncore with every CPU of socket 0 polling; accepted and documented, not worked around (turning PCM off would lose the DRAM column). It did not show in the 20 s runs of g0:
+
+g0 again with the fixes (dut `/mydata/exp_g0fix`, 98% unless stated; before → after):
+
+| run | lost before | lost after | p99.99 after |
+|---|---|---|---|
+| privring-1024 | 0 (p99.99 105 us) | 0 | 63 us |
+| privring-128 | 1,774 | 0 | 69 us |
+| shringfix-8 | 17,734 | 0 | 68 us |
+| fill-128 | 1,891 | 0 | 64 us |
+| dyn-128 | 25 | 2 | 62 us |
+| heavy dyn-128 | 19 (p99.99 104 us) | 0 | 67 us |
+| trace MAWI fill-128 | 7,088 | 0 | — |
+| stall shringfix-8 | 0.45% | 0.44% | p0q3 p99.9 982 us |
+| pv1600 dyn-128 | 0.051% | 0.038% | — |
+
+Occupancy max on lcores 0 and 15 fell to 5-18, as on the others. The stall run is the experiment, not noise: each of port 0's queues loses 1,800 probes (shRing's HOL blocking), port 1 none; pv1600's loss is the overloaded target queues (lcores 3 and 11).
+
+**Open:** `per queue tx (port 1)` prints zeros (only tx queues 0-7 are printed). `eval_report.py` does not parse the two-port summary yet. (The DRAM puzzle first listed here was a parser bug, 21.5.)
+
+### 21.5 all3 results, a DRAM parser bug, and saturation without PCM (2026-11-17/18)
+
+**all3** ran 2026-11-17 13:31–19:37 CST with the fixes of 21.4: 7 batteries, 325 runs, all OK (data: dut and tgen `/mydata/exp`, `eval_g1..g7`).
+
+**The DRAM bug.** `harness/pcm_window.py` and `pcm_summary.sh` read the System Read/Write columns of `pcm-memory -csv` at fixed positions (11/12, 0-based). That is right with one socket only: with two, each socket adds five columns, System Read/Write move to 16/17, and column 12 is **System DRAMRead**, so every "write" of g0–g7 as first summarized was a read (privring-1024 "1.5 GB/s", dyn "49 MB/s"). Both now find the columns by the two header rows (`("System","Read")`, `("System","Write")`) and stop with an error when they are missing; with one socket the output is unchanged (checked on an sm110p CSV), so §17–20 stand. Every all3 run was recomputed with the fixed parser and the same windows as `sweep.sh` (dut `/mydata/exp/dram_fixed.txt`, `/mydata/exp_g0fix/dram_fixed.txt`).
+
+DRAM write, g1, 2 × 98%, balanced (one port on sm110p, §20, for scale), against the write the DDIO miss rate of g2 predicts (miss share × 386 M lines/s × 64 B):
+
+| system | 200 Gb/s | predicted by g2's DDIO | sm110p, one port |
+|---|---|---|---|
+| dyn-128 | **262 MB/s** | 0.4 GB/s (hit 98.4%) | 21 MB/s |
+| shringfix-8 | 776 MB/s | 2.3 GB/s (hit 90.6%) | 52 MB/s |
+| privring-128 | 5,976 MB/s | 6.8 GB/s (hit 72.6%) | 907 MB/s |
+| fill-128 | 6,677 MB/s | 7.5 GB/s (hit 69.5%) | 519 MB/s |
+| privring-1024 | 19,163 MB/s | 19.5 GB/s (hit 21.3%) | 9,972 MB/s |
+
+The two meters agree except for shRing, whose misses become writes only in part (not explained). Heavy NF (g3, 128 reads/pkt, 98%): dyn writes 3.6 GB/s, privring-128 5.6, fill 6.5, shringfix 9.9, privring-1024 17.4 — dyn lowest in every battery, including the slow target of g5 (~5 GB/s vs ~12 for the static rings).
+
+**Other headlines of all3.** g1: no system loses at 2 × 98% balanced. g4 (stall): the same loss ratios as one port; port 1 never loses, shRing loses on all of port 0's queues (HOL blocking across the shared ring). g5 (slow target): dyn's p99 2.6× under the static 128-buffer rings; shRing collapses from 1,600 cycles/pkt up. g6 (MAWI): plain shringfix loses 4%. g3/g7 (heavy NF): privring-1024 caps at ~12 Mpps (it loses 8% from 80%: 1,024 buffers × 16 queues do not fit the LLC); dyn best at 128 reads, but in g7 privring-128 had the better p99.99 than dyn at 90–98%.
+
+**That g7 tail was PCM, on one queue.** Per queue, dyn's p99.99 at 98% in g7 was 537–744 us on p1q7 (CPU 15, the residual PCM IPIs of 21.4) and 80–90 us on the other 15; privring-128 suffers the same IPIs but its p1q7 only reaches ~270 us, because a 128-buffer ring drops what dyn queues. So `sweep.sh` gained `pcm=off` (no PCM at all; the DRAM column is then empty and `pcm_summary.sh` is skipped), and **g8** (`harness/sweeps/eval3/g8_saturation.txt`, `run_eval.sh g8`, ~70 min) repeats the question without PCM: dyn-128, privring-128, fill-128, heavy NF (96 reads, payload), 90–100% in 30 s windows, n = 5 with the system order rotated; plus the MAWI trace at 98% with 48 reads, n = 3. Run 2026-11-18 11:30–12:39 from a copy of this tree on the dut (`/mydata/shumem-h`).
+
+g8, aggregate p99.99 (us) over 16 queues, all runs listed; loss 0 unless stated:
+
+| rate | dyn-128 | privring-128 | fill-128 |
+|---|---|---|---|
+| 90% | 74–79 | 75–79 | 83–88 |
+| 94% | 73–75 | 81–87 | 94–113 |
+| 96% | 75–78 | 86–95 | 191–194, loss 0.19% |
+| 98% | **76–85** | 94–125 | 189–195, loss 0.50% |
+| 100% | 693–743, loss 0.65% | 259–300, loss 0.29% | 192–193, loss 0.93% |
+
+Without PCM, dyn has the lowest tail of the three from 90 to 98%, with no loss and a spread of 9 us across five runs; its worst queue at 98% is p0q0 (median p99.99 88 us). The g7 result was the measurement, not dyn. **At 100% the saturated-tail limitation of 20.17 stands and is stable**: offered load is above capacity (16.3 Mpps carried by all three), dyn's queues grow to 500–700 buffers (hundreds of overloads per queue per run, thousands of denied grows: the pool is shared, so it cannot give every queue more), and that backlog is latency; it also loses more than privring-128 (0.65 vs 0.29%), carrying 16.30 vs 16.36 Mpps.
+
+MAWI at 98%, 48 reads (n = 3): dyn loses least (2.57% vs privring-128 3.09%, fill 4.59%) and has half the p99 (48 vs 98–102 us), but its p99.99 is 450 us against ~107 — the same trade: in a burst dyn queues what the 128-buffer rings drop, and a dropped packet has no latency. Report the two together.
+
+**Open (beyond 21.4):** whether dyn should cap a queue's growth at saturation (e.g. by its drain rate) so the 100% tail matches a static ring without losing the burst absorption is a design question, not a harness one.

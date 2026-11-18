@@ -117,6 +117,54 @@ else
     echo "node-setup: WARNING no CPU besides $busy_list and their hyperthreads; interrupts left as they are" >&2
 fi
 
-echo "node-setup: complete ($allocated hugepages, $HUGEPAGE_MOUNT mounted)"
 isolated=$(cat /sys/devices/system/cpu/isolated 2>/dev/null)
+
+# --- CPU 0 as a polling lcore (CLAUDE.md 21.4) -------------------------------
+# Only when kernel-tuning.sh isolated CPU 0, i.e. the dut of sm220u with the
+# NIC on socket 0 (lcores 0-15); one port on sm110p keeps CPU 0 for the OS and
+# skips all of this. isolcpus=domain does not move what already sits on an
+# isolated CPU, and CPU 0 is where boot puts it. Three things paused CPU 0 (or
+# the socket's last CPU) for 100-600 us and lost packets on p0q0 at 2 x 98%:
+#  - kernel threads and services left on 0-15 (jbd2 + kblockd for /mydata on
+#    the root disk, kcompactd, rcu): every task that accepts it goes to the
+#    housekeeping CPUs; per-CPU kthreads refuse, as they should;
+#  - proactive compaction and NUMA balancing, which scan memory on any CPU;
+#  - a firmware GPE (0x6C on sm220u: Intel SPS Node Manager, HECI-2) firing
+#    twice a second, whose ACPI work the kernel always runs on CPU 0 (kacpid):
+#    every GPE that fires while the node idles is disabled (undo: echo enable
+#    > /sys/firmware/acpi/interrupts/gpeXX; a reboot also restores it).
+case "$isolated" in
+0|0,*|0-*)
+    if [ -n "$housekeeping" ]; then
+        moved=0
+        for pid in $(ps -eo pid=); do
+            case "$(cat /proc/$pid/comm 2>/dev/null)" in
+                dpdk-*|lcore-worker*|_t-rex-64) continue ;;   # a run in progress
+            esac
+            sudo taskset -apc "$housekeeping" "$pid" >/dev/null 2>&1 && moved=$((moved + 1))
+        done
+        echo "node-setup: $moved tasks moved to CPUs $housekeeping (CPU 0 is an lcore)"
+    fi
+    echo 0 | sudo tee /proc/sys/vm/compaction_proactiveness >/dev/null 2>&1 || true
+    echo 0 | sudo tee /proc/sys/kernel/numa_balancing >/dev/null 2>&1 || true
+    gpe_count() { awk '{print $1}' "$1" 2>/dev/null || echo 0; }
+    before=""
+    for gpe in /sys/firmware/acpi/interrupts/gpe[0-9A-F][0-9A-F]; do
+        [ -r "$gpe" ] && before="$before ${gpe##*/}=$(gpe_count "$gpe")"
+    done
+    sleep 3
+    for entry in $before; do
+        gpe=/sys/firmware/acpi/interrupts/${entry%=*}
+        if [ "$(gpe_count "$gpe")" -gt "${entry#*=}" ]; then
+            if echo disable | sudo tee "$gpe" >/dev/null 2>&1; then
+                echo "node-setup: periodic ACPI ${entry%=*} disabled (its work runs on CPU 0)"
+            else
+                echo "node-setup: WARNING could not disable periodic ACPI ${entry%=*}" >&2
+            fi
+        fi
+    done
+    ;;
+esac
+
+echo "node-setup: complete ($allocated hugepages, $HUGEPAGE_MOUNT mounted)"
 echo "node-setup: isolated CPUs ${isolated:-none}${isolated:+ (setup/kernel-tuning.sh --check for the rest)}"

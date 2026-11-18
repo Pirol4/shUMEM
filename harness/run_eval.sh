@@ -19,6 +19,7 @@
 #   TGEN_HOST=... TGEN_MAC=... harness/run_eval.sh consol  # f23, then the c batteries (20.20)
 #   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh g0     # 200 Gb/s smoke
 #   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh all3   # g1 to g7
+#   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh g8     # saturation, PCM off (21.5)
 
 set -euo pipefail
 
@@ -26,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SWEEPS_DIR="$SCRIPT_DIR/sweeps"
 EXP_DIR="${EXP_DIR:-/mydata/exp}"
 
-[[ $# -gt 0 ]] || { sed -n '3,22p' "$0" >&2; exit 1; }
+[[ $# -gt 0 ]] || { sed -n '3,23p' "$0" >&2; exit 1; }
 if [[ "$1" == all ]]; then
     set -- e1 e2 e3 e4 e5 e6 e7 e8
 elif [[ "$1" == all2 ]]; then
