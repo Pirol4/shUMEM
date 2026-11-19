@@ -1,55 +1,55 @@
 # The heavy NF without the payload read (f17's untouched half; g3 had it
-# read): 64, 96 and 128 random reads per packet, n = 3, PCM on for the
-# DRAM column (the throughput and loss are what the paper quotes).
+# read): 64, 96 and 128 random reads per packet, n = 3, PCM off: the paper
+# quotes its throughput, loss and latency (g3 has the DRAM, payload read).
 #
 # Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
 #
 # label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
 # round 1
-g11_mi64_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-128_n01                privring-128   -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_privring-128_n01                privring-128   -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-128_n01               privring-128   -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_privring-1024_n01               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-1024_n01               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-128_n01                privring-128   -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-128_n01                privring-128   -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-128_n01               privring-128   -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_fill-128_n01                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-1024_n01               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-1024_n01               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_fill-128_n01                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-1024_n01              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
 # round 2
-g11_mi128_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-128_n02                privring-128   -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-128_n02               privring-128   -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-1024_n02               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_privring-128_n02                privring-128   -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_privring-1024_n02               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_fill-128_n02                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-128_n02                privring-128   -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-1024_n02              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-128_n02               privring-128   -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-1024_n02               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-128_n02                privring-128   -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-1024_n02               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_fill-128_n02                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
 # round 3
-g11_mi64_privring-128_n03                privring-128   -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-128_n03               privring-128   -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-128_n03                privring-128   -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_privring-1024_n03               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi96_fill-128_n03                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi128_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_fill-128_n03                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
-g11_mi64_privring-1024_n03               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-128_n03                privring-128   -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-128_n03               privring-128   -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-128_n03                privring-128   -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_privring-1024_n03               privring-1024  -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi96_fill-128_n03                    fill-128       -  -  rates=98 duration=30 work=96 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_privring-1024_n03              privring-1024  -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi128_fill-128_n03                   fill-128       -  -  rates=98 duration=30 work=128 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_fill-128_n03                    fill-128       -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g11_mi64_privring-1024_n03               privring-1024  -  -  rates=98 duration=30 work=64 payload=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

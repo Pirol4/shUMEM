@@ -2154,19 +2154,21 @@ Decided with the user (2026-11-19): **the paper's evaluation moves to 2 × 100 G
 |---|---|---|---|
 | `gs` smoke | 9 | 15 min | 64 B at 2 × 100% (can TRex/NIC/PCIe carry 2 × 148.8 Mpps at all?), stall, dynold, switch, c0r8, skew, hot-move, tv20 on two ports |
 | g9 stall length | 175 | 3.9 h | f5: 100 µs–2 ms on p0q3, n = 5, PCM off |
-| g10 overload | 108 | 2.5 h | f6 1,600–6,400 + f13 switch, with dynold, n = 3, PCM off |
+| g10 overload | 126 | 2.9 h | f6 800–6,400 + f13 switch, with dynold, n = 3, PCM off (the slow-core figure from one battery) |
 | g12 NDR frame size | 93 | 4.0 h | f9 (multi) + f10: 64–1,500 B, dynold at 64 B, n = 3, PCM off |
 | g18 load–latency heavy | 15 | 1.0 h | g7 with PCM off, all five systems |
 | g19 MAWI heavy | 15 | 0.5 h | g6's 48 reads + payload with PCM off, all five |
-| g11 heavy, no payload | 45 | 1.0 h | f17 untouched half (g3 read the payload); 64/96/128 reads |
+| g11 heavy, no payload | 45 | 1.0 h | f17 untouched half (g3 read the payload); 64/96/128 reads, PCM off (its latency is quoted) |
 | g13 traffic variability | 45 | 1.0 h | f7 at 5/20/40%, PCM off |
 | g15 mempool | 45 | 1.0 h | f14 + **c0r1**, the control the 100 Gb/s battery lacked |
 | g17 load–latency plain | 15 | 1.0 h | f3, PCM off |
 | g14 skew | 15 | 0.5 h | f12 without STREAM |
 | g16 hot queue | 30 | 0.8 h | f15 |
-| g20 published + drift | 14 | 0.3 h | shring-8 cold/hot n = 5; four all3 cells again |
+| g20 published + ablation + drift | 17 | 0.4 h | shring-8 cold/hot n = 5; dynold balanced n = 3 (the policy's +3% cycles); four all3 cells again |
 
-About **18 h** for `all4`. **Not repeatable at 200 Gb/s:** co-location (f11) and skew with STREAM — the NIC's socket has no core left for a hog (§21.1); a hog on the other socket would not share the LLC. Stated in the paper as such.
+About **18.5 h** for `all4`. **Not repeatable at 200 Gb/s:** co-location (f11) and skew with STREAM — the NIC's socket has no core left for a hog (§21.1); a hog on the other socket would not share the LLC. Stated in the paper as such.
+
+**Coverage check (2026-11-19, before running):** the driver is the evaluated one (fork `5f3a20100..9edbb327b` touches only `examples/l3fwd`). Every row of the paper's tables and every claim of its evaluation has a 200 Gb/s source: posted / DRAM / DDIO / Rx cycles — g1, g2; policy cost — g20 dynold bal; Gb/s and latency at 128 reads — g11; p99 at 96 reads + payload and load–latency — g18, g17; stalls cold / hot / two borrowers — g4 (PCM on; all3 found port 1 lossless, so p1q7's PCM IPIs did not reach the loss), stall length and stalled-queue tail — g9; slow core, switch, overload ablation, onset tail — g10; DRAM with a heavy NF — g3; saturation tail — g8; MAWI — g6 (DRAM), g19 (loss, latency); 64 B and the rate-floor ablation — g12; mempool — g15; ties — g13, g14, g16; published shRing — g20. Not at 200 Gb/s: co-location (no free core), single-core NDR (unused by the paper).
 
 **Read `gs` before `all4`:** if privring-128 cannot carry 2 × 100% of 64 B, the small sizes of g12 measure TRex, the NIC or its single PCIe Gen4 x16 slot, not the Rx path; then g12's 64–256 B cells stay at one port (f10) with that reason, and g12 still gives 512–1,500 B.
 

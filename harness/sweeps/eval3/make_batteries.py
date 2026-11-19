@@ -219,25 +219,25 @@ def g9():
 def g10():
     tv = weights(0.0722)
     tests = [("pv%d" % a, "rates=98 duration=30 work=2 target=%s:%d --queue-weights %s %s %s %s"
-              % (TARGETS, a, tv, OFF, WARM, LAT)) for a in (1600, 2400, 3200, 4800, 6400)]
+              % (TARGETS, a, tv, OFF, WARM, LAT)) for a in (800, 1600, 2400, 3200, 4800, 6400)]
     tests.append(("switch", "rates=98 duration=40 work=2 target=%s:800 --queue-weights %s "
                   "--schedule switch:20:%s --timeseries %s %s %s"
                   % (TARGETS, tv, weights(1), OFF, WARM, LAT)))
     write("g10_overload.txt", [
         "The slow target (f6) and the load switch (f13) with the overload policy's",
         "ablation, PCM off (g5's latency had PCM on), n = 3: target p0q3 and p1q3",
-        "at 1,600-6,400 reads per packet, and both switching to their full share",
+        "at 800-6,400 reads per packet, and both switching to their full share",
         "with 800 reads at 20 s; dynold-128 = dyn-128 with overload and rate floor off.",
     ], systems_rounds("g10", tests, CORE_SYS + [DYNOLD], 3))
 
 
 def g11():
-    tests = [("mi%d" % w, "rates=98 duration=30 work=%d payload=0 %s %s"
-              % (w, WARM, LAT)) for w in (64, 96, 128)]
+    tests = [("mi%d" % w, "rates=98 duration=30 work=%d payload=0 %s %s %s"
+              % (w, OFF, WARM, LAT)) for w in (64, 96, 128)]
     write("g11_heavy_nopayload.txt", [
         "The heavy NF without the payload read (f17's untouched half; g3 had it",
-        "read): 64, 96 and 128 random reads per packet, n = 3, PCM on for the",
-        "DRAM column (the throughput and loss are what the paper quotes).",
+        "read): 64, 96 and 128 random reads per packet, n = 3, PCM off: the paper",
+        "quotes its throughput, loss and latency (g3 has the DRAM, payload read).",
     ], systems_rounds("g11", tests, CORE_SYS, 3))
 
 
@@ -337,13 +337,18 @@ def g20():
     body = systems_rounds("g20", tests, [("shring-8", "shring-8", "")], 5)
     drift = [("bal", "rates=98 duration=60 %s %s" % (WARM, LAT)),
              ("cold", "rates=98 duration=30 stall=%s:1000:100 %s %s" % (STALL, WARM, LAT))]
+    # The policy's cost (Rx cycles, 21 vs 32 MB/s at one port): dyn without it.
+    bal = [("bal", "rates=98 duration=60 %s %s" % (WARM, LAT))]
+    body += ["# ablation under balanced load, PCM on as g1"]
+    body += systems_rounds("g20", bal, [DYNOLD], 3)
     body += ["# drift check against all3 (g1, g4): same cells, same PCM"]
     body += systems_rounds("g20d", drift, [("fill-128", "fill-128", ""),
                                            ("dyn-128", "dyn-128", "")], 1)
     write("g20_published_drift.txt", [
         "The published shRing code (shring-8, no race fix) under the cold and hot",
         "stalls, n = 5, PCM off: does it wedge at 200 Gb/s as at 100 (5 of 10)?",
-        "Then a drift check: four cells of all3 run again with PCM, as g1/g4 were.",
+        "Then dynold-128 balanced (n = 3, the policy's cost against g1's dyn-128)",
+        "and a drift check: four cells of all3 run again with PCM, as g1/g4 were.",
     ], body)
 
 
