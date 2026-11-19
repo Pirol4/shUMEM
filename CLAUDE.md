@@ -2140,3 +2140,42 @@ Without PCM, dyn has the lowest tail of the three from 90 to 98%, with no loss a
 MAWI at 98%, 48 reads (n = 3): dyn loses least (2.57% vs privring-128 3.09%, fill 4.59%) and has half the p99 (48 vs 98–102 us), but its p99.99 is 450 us against ~107 — the same trade: in a burst dyn queues what the 128-buffer rings drop, and a dropped packet has no latency. Report the two together.
 
 **Open (beyond 21.4):** whether dyn should cap a queue's growth at saturation (e.g. by its drain rate) so the 100% tail matches a static ring without losing the burst absorption is a design question, not a harness one.
+
+### 21.6 Round 2 at 200 Gb/s: every experiment g0–g8 lacks (prepared 2026-11-19; nodes to 2026-11-21)
+
+Decided with the user (2026-11-19): **the paper's evaluation moves to 2 × 100 Gb/s**, the rxBisect paper's load, and runs there everything the 100 Gb/s evaluation has, so no experiment rests on one port only. 100 Gb/s (§20, n = 10) stays as the thesis's long version. What doubling the load changes is exactly the paper's argument: 2,048 buffers posted by the static small rings no longer fit DDIO (§21.5: privring-128 6.0 GB/s, fill-128 6.7 GB/s of DRAM write against dyn-128's 0.26).
+
+**Harness (this commit; no fork change, no rebuild):**
+
+- `sweep.sh`: `groups=G` gave `FILL_GROUPS=G` too, but fill_groups splits *each port's* queues while `L3FWD_MEMPOOL_GROUPS` splits *all* Rx lcores: with two ports `groups=8` meant mbuf pools of two lcores but one credit pool per queue. Now `FILL_GROUPS = G / PORTS` (G a multiple of PORTS), so `groups=8` at 200 Gb/s is §20's `groups=4` per port (pairs). One port: unchanged.
+- `eval3/make_batteries.py` writes `gs` and `g9`–`g20` (g0–g7 byte for byte as before). **PCM off (`pcm=off`) wherever the result is loss or latency** (every CPU of the NIC's socket is an lcore, and PCM's IPIs cost p1q7 packets and tail, §21.4–21.5); PCM on only where the DRAM column is the point. `dynold-128` = dyn-128 with `overload=0 runway=0`, the ablation. `run_eval.sh all4` runs g9–g20 in priority order.
+
+| battery | runs | ~time | what (100 Gb/s counterpart) |
+|---|---|---|---|
+| `gs` smoke | 9 | 15 min | 64 B at 2 × 100% (can TRex/NIC/PCIe carry 2 × 148.8 Mpps at all?), stall, dynold, switch, c0r8, skew, hot-move, tv20 on two ports |
+| g9 stall length | 175 | 3.9 h | f5: 100 µs–2 ms on p0q3, n = 5, PCM off |
+| g10 overload | 108 | 2.5 h | f6 1,600–6,400 + f13 switch, with dynold, n = 3, PCM off |
+| g12 NDR frame size | 93 | 4.0 h | f9 (multi) + f10: 64–1,500 B, dynold at 64 B, n = 3, PCM off |
+| g18 load–latency heavy | 15 | 1.0 h | g7 with PCM off, all five systems |
+| g19 MAWI heavy | 15 | 0.5 h | g6's 48 reads + payload with PCM off, all five |
+| g11 heavy, no payload | 45 | 1.0 h | f17 untouched half (g3 read the payload); 64/96/128 reads |
+| g13 traffic variability | 45 | 1.0 h | f7 at 5/20/40%, PCM off |
+| g15 mempool | 45 | 1.0 h | f14 + **c0r1**, the control the 100 Gb/s battery lacked |
+| g17 load–latency plain | 15 | 1.0 h | f3, PCM off |
+| g14 skew | 15 | 0.5 h | f12 without STREAM |
+| g16 hot queue | 30 | 0.8 h | f15 |
+| g20 published + drift | 14 | 0.3 h | shring-8 cold/hot n = 5; four all3 cells again |
+
+About **18 h** for `all4`. **Not repeatable at 200 Gb/s:** co-location (f11) and skew with STREAM — the NIC's socket has no core left for a hog (§21.1); a hog on the other socket would not share the LLC. Stated in the paper as such.
+
+**Read `gs` before `all4`:** if privring-128 cannot carry 2 × 100% of 64 B, the small sizes of g12 measure TRex, the NIC or its single PCIe Gen4 x16 slot, not the Rx path; then g12's 64–256 B cells stay at one port (f10) with that reason, and g12 still gives 512–1,500 B.
+
+**Runbook (dut and tgen still instantiated):**
+
+1. Both nodes: `sudo git -C /local/repository pull` (or the dut's copy `/mydata/shumem-h` if that is the tree in use, §21.5); `git log --oneline -1` shows this commit. TRex in tmux on the tgen as before (`-c 12 --hdrh`).
+2. dut, tmux, own user: `TGEN_HOST=<tgen> TGEN_MAC=<mac> TGEN_MAC2=<mac2> harness/run_eval.sh gs`; send `summary.txt` for reading.
+3. Then `KEEP_GOING=1 TGEN_HOST=… TGEN_MAC=… TGEN_MAC2=… harness/run_eval.sh all4` (~18 h; resumes where it stopped if started again).
+4. Before 2026-11-21 ends: copy to `C:\Users\filip\shumem_eval3` the dut's `/mydata/exp` (with `dram_fixed.txt`), `/mydata/exp_g0fix`, `/mydata/exp_diag`, `/mydata/dpdk-research/results` and the tgen's `/mydata/exp` — the all3/g8 data are not on this machine yet either.
+5. Here: `eval_report.py` must learn the two-port summary (per-port queue lines, `p1q3` latency names, dram_fixed) before any table; then the paper's tables and figures from it.
+
+**Predictions:** g9 — dyn-128 loses nothing up to ~750 µs as at one port (per-queue rate and per-port credits unchanged), shRing loses on all of port 0's queues and none of port 1's; g10 — dynold's target p99 ~13× dyn's, as f6; g12 — shRing caps near 2 × 21.8 Mpps at 64 B if the CPU is its limit; g15 c0r1 — every system loses heavily (single pool, no cache, 16 lcores), c0r8 brings dyn and privring-128 back to 0.

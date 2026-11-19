@@ -1,0 +1,24 @@
+# The CAIDA-like time-varying skew (f12) on both ports, n = 3, no STREAM
+# variant (no free core on the NIC's socket), PCM on for the DRAM column.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g14_skew_privring-1024_n01               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_dyn-128_n01                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_fill-128_n01                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_privring-128_n01                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g14_skew_fill-128_n02                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_privring-1024_n02               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_dyn-128_n02                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_privring-128_n02                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:2 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g14_skew_dyn-128_n03                     dyn-128        -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_privring-128_n03                privring-128   -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_privring-1024_n03               privring-1024  -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_fill-128_n03                    fill-128       -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g14_skew_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=60 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:3 --timeseries --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

@@ -1,0 +1,20 @@
+# Smoke of round 2 at 200 Gb/s (~15 min), read before the rest: the two 64 B
+# runs say whether TRex and the NIC carry 2 x 148.8 Mpps at all (if privring-128
+# cannot, g12 measures the testbed, not the Rx path: keep 64 B at one port);
+# the stall run loses on p0q3 only; dynold-128's p0q3 and p1q3 budgets reach
+# ~800 (no overloads), the switch run shows overloads after 20 s on both
+# targets; c0r8 prints 8 MEMPOOL lines and 4 credit pools per port; the skew,
+# hot-move and tv20 runs fill both ports' per-queue lines as their schedules say.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+gs_r100_64B_privring-128                 privring-128   -  -  rates=100 duration=10 --pkt-size 60 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+gs_r100_64B_dyn-128                      dyn-128        -  -  rates=100 duration=10 --pkt-size 60 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+gs_len500_dyn-128                        dyn-128        -  -  rates=98 duration=20 stall=p0q3:500:100 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_pv2400_dynold-128                     dyn-128        -  -  rates=98 duration=20 work=2 target=p0q3,p1q3:2400 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 overload=0 runway=0 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_switch_dyn-128                        dyn-128        -  -  rates=98 duration=40 work=2 target=p0q3,p1q3:800 --queue-weights 1.0,1.0,1.0,0.0722,1.0,1.0,1.0,1.0 --schedule switch:20:1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --timeseries pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_c0r8_dyn-128                          dyn-128        -  -  rates=98 duration=20 cache=0 groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_skew_dyn-128                          dyn-128        -  -  rates=98 duration=20 work=2 --queue-weights 1.0,1.0,1.0,1,1.0,1.0,1.0,1.0 --schedule skew:1 --timeseries pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_hotmv_fill-128                        fill-128       -  -  rates=98 duration=20 --hot-share 0.5 --hot-move 5 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+gs_tv20_dyn-128                          dyn-128        -  -  rates=98 duration=20 work=2 --queue-weights 1.0,1.0,1.0,1.75,1.0,1.0,1.0,1.0 --queue-sizes 1500,1500,1500,60,1500,1500,1500,1500 pcm=off --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

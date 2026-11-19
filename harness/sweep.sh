@@ -27,6 +27,7 @@
 #                            latency there is measured without it
 #   ops=<driver>             l3fwd's mempool driver (ring_mp_mc, stack, lf_stack)
 #   groups=<G>               G mbuf pools (l3fwd) and, for dyn-*, G credit pools
+#                            (G / PORTS credit pools per port with two ports)
 #   reserve=<R>              dyn-* credit pool reserve (default 0 since fork
 #                            c4df0acf6; 64 was the 19.27 setting)
 #   work=<N>                 every lcore does N random reads per packet in a
@@ -458,7 +459,13 @@ run_one() {
     [[ -z "$cache" ]] || env_args+=("L3FWD_MEMPOOL_CACHE=$cache")
     [[ "$pcm" == off ]] || env_args+=("PCM_TOOL=$pcm")
     [[ -z "$ops" ]] || env_args+=("L3FWD_MEMPOOL_OPS=$ops")
-    [[ -z "$groups" ]] || env_args+=("L3FWD_MEMPOOL_GROUPS=$groups" "FILL_GROUPS=$groups")
+    # groups= splits every Rx lcore (all ports) into mbuf pools, but fill_groups
+    # splits each port's queues: with two ports, groups=8 is 8 pools of two lcores
+    # and 4 credit pools of two queues per port, the pairs of one port's groups=4.
+    if [[ -n "$groups" ]]; then
+        (( groups == 1 || groups % PORTS == 0 )) || die "$label: groups=$groups is not a multiple of PORTS=$PORTS"
+        env_args+=("L3FWD_MEMPOOL_GROUPS=$groups" "FILL_GROUPS=$(( groups == 1 ? 1 : groups / PORTS ))")
+    fi
     [[ -z "$reserve" ]] || env_args+=("FILL_RESERVE=$reserve")
     [[ -z "$work" ]] || env_args+=("L3FWD_WORK_ACCESSES=$work")
     [[ -z "$target" ]] || env_args+=("L3FWD_WORK_TARGET=$target")

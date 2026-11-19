@@ -1,0 +1,108 @@
+# No-drop rate (loss <= 1e-6, 10 s trials) at 64-1,500 B frames on both ports
+# (f9 multi-core and f10), n = 3, PCM off; dynold-128 at 64 B (the rate
+# floor's ablation). Read gs first: if TRex or the NIC cannot carry 2 x
+# 148.8 Mpps, the small sizes measure the testbed.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g12_sz256_privring-128_n01               privring-128   -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_fill-128_n01                  fill-128       -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_fill-128_n01                   fill-128       -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-1024_n01               privring-1024  -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_shringfix-8_n01                 shringfix-8    -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_dyn-128_n01                   dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_dyn-128_n01                   dyn-128        -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_dyn-128_n01                    dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_fill-128_n01                   fill-128       -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_dyn-128_n01                    dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_dyn-128_n01                     dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-128_n01                privring-128   -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-128_n01               privring-128   -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_shringfix-8_n01                shringfix-8    -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_privring-1024_n01             privring-1024  -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_shringfix-8_n01               shringfix-8    -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_fill-128_n01                   fill-128       -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_dyn-128_n01                    dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-1024_n01              privring-1024  -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_privring-128_n01              privring-128   -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-1024_n01             privring-1024  -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_fill-128_n01                  fill-128       -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_fill-128_n01                    fill-128       -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_privring-1024_n01              privring-1024  -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-128_n01              privring-128   -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-128_n01               privring-128   -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_shringfix-8_n01                shringfix-8    -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-1024_n01              privring-1024  -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_shringfix-8_n01                shringfix-8    -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_shringfix-8_n01               shringfix-8    -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 2
+g12_sz128_dyn-128_n02                    dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_privring-1024_n02             privring-1024  -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_shringfix-8_n02               shringfix-8    -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_fill-128_n02                  fill-128       -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_privring-128_n02              privring-128   -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_shringfix-8_n02                shringfix-8    -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_dyn-128_n02                    dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_privring-1024_n02              privring-1024  -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_fill-128_n02                   fill-128       -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-1024_n02              privring-1024  -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_shringfix-8_n02                shringfix-8    -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-1024_n02             privring-1024  -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_fill-128_n02                   fill-128       -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_privring-128_n02               privring-128   -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-1024_n02               privring-1024  -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-128_n02               privring-128   -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-128_n02               privring-128   -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_shringfix-8_n02               shringfix-8    -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_dyn-128_n02                     dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-128_n02                privring-128   -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_shringfix-8_n02                shringfix-8    -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_dyn-128_n02                   dyn-128        -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_dyn-128_n02                   dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_dyn-128_n02                    dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-1024_n02              privring-1024  -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_fill-128_n02                  fill-128       -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_fill-128_n02                    fill-128       -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_fill-128_n02                   fill-128       -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_shringfix-8_n02                 shringfix-8    -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-128_n02              privring-128   -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# round 3
+g12_sz1024_privring-128_n03              privring-128   -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-1024_n03              privring-1024  -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_shringfix-8_n03                shringfix-8    -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_shringfix-8_n03                shringfix-8    -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-128_n03                privring-128   -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_privring-1024_n03               privring-1024  -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_dyn-128_n03                     dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_dyn-128_n03                    dyn-128        -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_privring-1024_n03              privring-1024  -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_privring-1024_n03             privring-1024  -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_privring-128_n03               privring-128   -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_shringfix-8_n03                 shringfix-8    -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_fill-128_n03                   fill-128       -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz64_fill-128_n03                    fill-128       -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_fill-128_n03                   fill-128       -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-128_n03               privring-128   -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz512_privring-128_n03               privring-128   -  -  duration=10 --pkt-size 508 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_privring-1024_n03              privring-1024  -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_fill-128_n03                   fill-128       -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_fill-128_n03                  fill-128       -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-128_n03              privring-128   -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_shringfix-8_n03               shringfix-8    -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_dyn-128_n03                   dyn-128        -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_shringfix-8_n03                shringfix-8    -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_dyn-128_n03                   dyn-128        -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz256_dyn-128_n03                    dyn-128        -  -  duration=10 --pkt-size 252 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1024_fill-128_n03                  fill-128       -  -  duration=10 --pkt-size 1020 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_privring-1024_n03             privring-1024  -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz1500_shringfix-8_n03               shringfix-8    -  -  duration=10 --pkt-size 1500 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+g12_sz128_dyn-128_n03                    dyn-128        -  -  duration=10 --pkt-size 124 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required
+# rate-floor ablation
+# round 1
+g12_sz64_dynold-128_n01                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+# round 2
+g12_sz64_dynold-128_n02                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0
+# round 3
+g12_sz64_dynold-128_n03                  dyn-128        -  -  duration=10 --pkt-size 60 --search 5,100 pcm=off --warmup 10 --lat-queues all --lat-pps 1000 --hdrh required overload=0 runway=0

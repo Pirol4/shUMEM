@@ -1,0 +1,56 @@
+# The shared mempool (f14) at 200 Gb/s, n = 3, PCM on (DRAM is the point of
+# the cache-32 cells): cache 0 with one pool per port (c0r1, the control
+# the 100 Gb/s battery lacked) and with 8 pools of two lcores (4 credit pools
+# per port), ring or stack; cache 32 with the FIFO ring or the LIFO stack.
+#
+# Needs PORTS=2 and TGEN_MAC2 (run_eval.sh sets PORTS=2 for g*).
+#
+# label  system  window_ms  headroom_pct  options / extra rate_sweep.py args
+# round 1
+g15_c0s8_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_privring-128_n01                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_privring-128_n01               privring-128   -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_privring-128_n01                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_privring-128_n01                privring-128   -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_privring-128_n01               privring-128   -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_dyn-128_n01                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_shringfix-8_n01                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_dyn-128_n01                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_shringfix-8_n01                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 2
+g15_c0s8_privring-128_n02                privring-128   -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_privring-128_n02               privring-128   -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_privring-128_n02                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_privring-128_n02                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_dyn-128_n02                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_privring-128_n02               privring-128   -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_shringfix-8_n02                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_shringfix-8_n02                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_dyn-128_n02                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+# round 3
+g15_c32s1_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_privring-128_n03                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_privring-128_n03                privring-128   -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r8_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_privring-128_n03                privring-128   -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_dyn-128_n03                    dyn-128        -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_shringfix-8_n03                 shringfix-8    -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_privring-128_n03               privring-128   -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0r1_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32r1_privring-128_n03               privring-128   -  -  rates=98 duration=30 cache=32 ops=ring_mp_mc groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c0s8_dyn-128_n03                     dyn-128        -  -  rates=98 duration=30 cache=0 ops=stack groups=8 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required
+g15_c32s1_shringfix-8_n03                shringfix-8    -  -  rates=98 duration=30 cache=32 ops=stack groups=1 --warmup 10 --lat-queues all --lat-pps 10000 --hdrh required

@@ -20,6 +20,8 @@
 #   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh g0     # 200 Gb/s smoke
 #   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh all3   # g1 to g7
 #   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh g8     # saturation, PCM off (21.5)
+#   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh gs     # round-2 smoke (21.6)
+#   TGEN_HOST=... TGEN_MAC=... TGEN_MAC2=... harness/run_eval.sh all4   # g9 to g20, priority order
 
 set -euo pipefail
 
@@ -27,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SWEEPS_DIR="$SCRIPT_DIR/sweeps"
 EXP_DIR="${EXP_DIR:-/mydata/exp}"
 
-[[ $# -gt 0 ]] || { sed -n '3,23p' "$0" >&2; exit 1; }
+[[ $# -gt 0 ]] || { sed -n '3,25p' "$0" >&2; exit 1; }
 if [[ "$1" == all ]]; then
     set -- e1 e2 e3 e4 e5 e6 e7 e8
 elif [[ "$1" == all2 ]]; then
@@ -40,6 +42,9 @@ elif [[ "$1" == consol ]]; then
 elif [[ "$1" == all3 ]]; then
     # 200 Gb/s (CLAUDE.md 21): the comparison's core first.
     set -- g1 g4 g5 g3 g6 g2 g7
+elif [[ "$1" == all4 ]]; then
+    # 200 Gb/s round 2 (CLAUDE.md 21.6): what the paper needs most first.
+    set -- g9 g10 g12 g18 g19 g11 g13 g15 g17 g14 g16 g20
 fi
 
 failed=()

@@ -144,8 +144,214 @@ def g7():
     ], rounds("g7", cells, 3))
 
 
+# --- Round 2 at 200 Gb/s (CLAUDE.md 21.6): every eval2 experiment g0-g8 lacks --------
+# The paper's evaluation moves to 2 x 100 Gb/s, the rxBisect paper's load, so
+# the 100 Gb/s experiments g0-g8 did not repeat are added here. Runs whose
+# result is loss or latency use pcm=off: with every CPU of the NIC's socket an
+# lcore, PCM's uncore reads interrupt the socket's last CPU (p1q7) by IPI and
+# cost it packets and tail (21.4-21.5). Runs that need the DRAM column keep it.
+# dynold-128 is dyn-128 with the overload policy and the rate floor off, the
+# ablation of the paper (eval2's OLD).
+OFF = "pcm=off"
+OLD = eval2.OLD
+
+
+def systems_rounds(battery, tests, systems, n):
+    """tests: [(cell, options)]; systems: [(label name, system, extra options)]."""
+    out = []
+    for k in range(1, n + 1):
+        order = [(cell, name, system, ("%s %s" % (opts, extra)).strip())
+                 for cell, opts in tests for name, system, extra in systems]
+        eval2.random.Random("%s-%d" % (battery, k)).shuffle(order)
+        out.append("# round %d" % k)
+        out += [line("%s_%s_%s_n%02d" % (battery, cell, name, k), system, options)
+                for cell, name, system, options in order]
+    return out
+
+
+CORE_SYS = [(s, s, "") for s in CORE]
+DYNOLD = ("dynold-128", "dyn-128", OLD)
+
+
+def gs():
+    tv = weights(0.0722)
+    cells = [
+        line("gs_r100_64B_privring-128", "privring-128",
+             "rates=100 duration=10 --pkt-size 60 %s %s %s" % (OFF, WARM, eval2.LAT_NDR)),
+        line("gs_r100_64B_dyn-128", "dyn-128",
+             "rates=100 duration=10 --pkt-size 60 %s %s %s" % (OFF, WARM, eval2.LAT_NDR)),
+        line("gs_len500_dyn-128", "dyn-128", "rates=98 duration=20 stall=%s:500:100 %s %s %s"
+             % (STALL, OFF, WARM, LAT)),
+        line("gs_pv2400_dynold-128", "dyn-128", "rates=98 duration=20 work=2 target=%s:2400 "
+             "--queue-weights %s %s %s %s %s" % (TARGETS, tv, OLD, OFF, WARM, LAT)),
+        line("gs_switch_dyn-128", "dyn-128", "rates=98 duration=40 work=2 target=%s:800 "
+             "--queue-weights %s --schedule switch:20:%s --timeseries %s %s %s"
+             % (TARGETS, tv, weights(1), OFF, WARM, LAT)),
+        line("gs_c0r8_dyn-128", "dyn-128", "rates=98 duration=20 cache=0 groups=8 %s %s"
+             % (WARM, LAT)),
+        line("gs_skew_dyn-128", "dyn-128", "rates=98 duration=20 work=2 --queue-weights %s "
+             "--schedule skew:1 --timeseries %s %s %s" % (weights(1), OFF, WARM, LAT)),
+        line("gs_hotmv_fill-128", "fill-128", "rates=98 duration=20 --hot-share 0.5 "
+             "--hot-move 5 %s %s %s" % (OFF, WARM, LAT)),
+        line("gs_tv20_dyn-128", "dyn-128", "rates=98 duration=20 work=2 --queue-weights %s "
+             "--queue-sizes %s %s %s %s" % (weights(0.2 / 0.8 * 7), eval2.sizes(60), OFF, WARM, LAT)),
+    ]
+    write("gs_smoke.txt", [
+        "Smoke of round 2 at 200 Gb/s (~15 min), read before the rest: the two 64 B",
+        "runs say whether TRex and the NIC carry 2 x 148.8 Mpps at all (if privring-128",
+        "cannot, g12 measures the testbed, not the Rx path: keep 64 B at one port);",
+        "the stall run loses on p0q3 only; dynold-128's p0q3 and p1q3 budgets reach",
+        "~800 (no overloads), the switch run shows overloads after 20 s on both",
+        "targets; c0r8 prints 8 MEMPOOL lines and 4 credit pools per port; the skew,",
+        "hot-move and tv20 runs fill both ports' per-queue lines as their schedules say.",
+    ], cells)
+
+
+def g9():
+    tests = [("len%d" % us, "rates=98 duration=30 stall=%s:%d:100 %s %s %s"
+              % (STALL, us, OFF, WARM, LAT)) for us in (100, 250, 500, 750, 1000, 1500, 2000)]
+    write("g9_stall_len.txt", [
+        "Cold-core stall from 100 us to 2 ms every 100 ms on p0q3 (f5), n = 5, PCM",
+        "off: where each system starts to lose; port 1 is a bystander port.",
+    ], systems_rounds("g9", tests, CORE_SYS, 5))
+
+
+def g10():
+    tv = weights(0.0722)
+    tests = [("pv%d" % a, "rates=98 duration=30 work=2 target=%s:%d --queue-weights %s %s %s %s"
+              % (TARGETS, a, tv, OFF, WARM, LAT)) for a in (1600, 2400, 3200, 4800, 6400)]
+    tests.append(("switch", "rates=98 duration=40 work=2 target=%s:800 --queue-weights %s "
+                  "--schedule switch:20:%s --timeseries %s %s %s"
+                  % (TARGETS, tv, weights(1), OFF, WARM, LAT)))
+    write("g10_overload.txt", [
+        "The slow target (f6) and the load switch (f13) with the overload policy's",
+        "ablation, PCM off (g5's latency had PCM on), n = 3: target p0q3 and p1q3",
+        "at 1,600-6,400 reads per packet, and both switching to their full share",
+        "with 800 reads at 20 s; dynold-128 = dyn-128 with overload and rate floor off.",
+    ], systems_rounds("g10", tests, CORE_SYS + [DYNOLD], 3))
+
+
+def g11():
+    tests = [("mi%d" % w, "rates=98 duration=30 work=%d payload=0 %s %s"
+              % (w, WARM, LAT)) for w in (64, 96, 128)]
+    write("g11_heavy_nopayload.txt", [
+        "The heavy NF without the payload read (f17's untouched half; g3 had it",
+        "read): 64, 96 and 128 random reads per packet, n = 3, PCM on for the",
+        "DRAM column (the throughput and loss are what the paper quotes).",
+    ], systems_rounds("g11", tests, CORE_SYS, 3))
+
+
+def g12():
+    # --pkt-size excludes the FCS (64 B on the wire = 60); 1500 is every other run's.
+    sizes = ((64, 60), (128, 124), (256, 252), (512, 508), (1024, 1020), (1500, 1500))
+    tests = [("sz%d" % name, "duration=10 --pkt-size %d --search 5,100 %s %s %s"
+              % (size, OFF, WARM, eval2.LAT_NDR)) for name, size in sizes]
+    body = systems_rounds("g12", tests, CORE_SYS, 3)
+    # The rate floor's ablation where it matters: 64 B.
+    abl = [("sz64", "duration=10 --pkt-size 60 --search 5,100 %s %s %s"
+            % (OFF, WARM, eval2.LAT_NDR))]
+    body += ["# rate-floor ablation"] + systems_rounds("g12", abl, [DYNOLD], 3)
+    write("g12_ndr_size.txt", [
+        "No-drop rate (loss <= 1e-6, 10 s trials) at 64-1,500 B frames on both ports",
+        "(f9 multi-core and f10), n = 3, PCM off; dynold-128 at 64 B (the rate",
+        "floor's ablation). Read gs first: if TRex or the NIC cannot carry 2 x",
+        "148.8 Mpps, the small sizes measure the testbed.",
+    ], body)
+
+
+def g13():
+    tests = []
+    for f in (0.05, 0.20, 0.40):
+        w = 7 * f / (1 - f)
+        tests.append(("tv%02d" % round(100 * f), "rates=98 duration=30 work=2 --queue-weights %s "
+                      "--queue-sizes %s %s %s %s" % (weights(w), eval2.sizes(60), OFF, WARM, LAT)))
+    write("g13_traffic_var.txt", [
+        "Traffic variability (f7; shRing Fig. 12, rxBisect Fig. 15) on both ports:",
+        "5/20/40% of each port's packets to its queue 3 as 64 B frames, n = 3, PCM off.",
+    ], systems_rounds("g13", tests, CORE_SYS, 3))
+
+
+def g14():
+    cells = [("skew", s, "rates=98 duration=60 work=2 --queue-weights %s --schedule skew:{k} "
+              "--timeseries %s %s" % (weights(1), WARM, LAT)) for s in CORE]
+    write("g14_skew.txt", [
+        "The CAIDA-like time-varying skew (f12) on both ports, n = 3, no STREAM",
+        "variant (no free core on the NIC's socket), PCM on for the DRAM column.",
+    ], rounds("g14", cells, 3))
+
+
+def g15():
+    configs = ((0, "ring_mp_mc", 1), (0, "ring_mp_mc", 8), (0, "stack", 8),
+               (32, "ring_mp_mc", 1), (32, "stack", 1))
+    tests = [("c%d%s%d" % (c, "s" if o == "stack" else "r", g),
+              "rates=98 duration=30 cache=%d ops=%s groups=%d %s %s" % (c, o, g, WARM, LAT))
+             for c, o, g in configs]
+    systems = [(s, s, "") for s in ("privring-128", "shringfix-8", "dyn-128")]
+    write("g15_mempool.txt", [
+        "The shared mempool (f14) at 200 Gb/s, n = 3, PCM on (DRAM is the point of",
+        "the cache-32 cells): cache 0 with one pool per port (c0r1, the control",
+        "the 100 Gb/s battery lacked) and with 8 pools of two lcores (4 credit pools",
+        "per port), ring or stack; cache 32 with the FIFO ring or the LIFO stack.",
+    ], systems_rounds("g15", tests, systems, 3))
+
+
+def g16():
+    tests = [("hot", "rates=98 duration=30 --hot-share 0.5 %s %s" % (WARM, LAT)),
+             ("hotmv", "rates=98 duration=60 --hot-share 0.5 --hot-move 5 %s %s" % (WARM, LAT))]
+    write("g16_hot.txt", [
+        "One hot queue per port (half of each port's traffic), fixed or moving every",
+        "5 s, no stall (f15), n = 3, PCM on (DRAM write is what differs).",
+    ], systems_rounds("g16", tests, CORE_SYS, 3))
+
+
+def g17():
+    rates = "10,30,50,70,80,90,95,98,100"
+    tests = [("load", "rates=%s duration=20 %s %s %s" % (rates, OFF, WARM, LAT))]
+    write("g17_load_latency.txt", [
+        "Latency against offered load with plain l3fwd (f3), %s%%, n = 3, PCM off." % rates,
+    ], systems_rounds("g17", tests, CORE_SYS, 3))
+
+
+def g18():
+    rates = "50,60,70,80,85,90,95,98,100"
+    tests = [("load", "rates=%s duration=20 work=96 payload=1 %s %s %s" % (rates, OFF, WARM, LAT))]
+    write("g18_load_heavy.txt", [
+        "g7 again with PCM off and all five systems (g8 had three): latency against",
+        "load with the heavy NF (96 reads, payload), %s%%, n = 3." % rates,
+    ], systems_rounds("g18", tests, CORE_SYS, 3))
+
+
+def g19():
+    tests = [("trace48p", "rates=98 duration=60 work=48 payload=1 --trace %s --timeseries %s %s %s"
+              % (MAWI, OFF, WARM, LAT))]
+    write("g19_mawi_heavy.txt", [
+        "The MAWI trace with 48 reads and payload (g6's heavy half) with PCM off and",
+        "all five systems (g8 had three), n = 3.",
+    ], systems_rounds("g19", tests, CORE_SYS, 3))
+
+
+def g20():
+    tests = [("cold", "rates=98 duration=30 stall=%s:1000:100 %s %s %s" % (STALL, OFF, WARM, LAT)),
+             ("hot", "rates=98 duration=30 stall=p0q0:1000:100 --hot-share 0.5 %s %s %s"
+              % (OFF, WARM, LAT))]
+    body = systems_rounds("g20", tests, [("shring-8", "shring-8", "")], 5)
+    drift = [("bal", "rates=98 duration=60 %s %s" % (WARM, LAT)),
+             ("cold", "rates=98 duration=30 stall=%s:1000:100 %s %s" % (STALL, WARM, LAT))]
+    body += ["# drift check against all3 (g1, g4): same cells, same PCM"]
+    body += systems_rounds("g20d", drift, [("fill-128", "fill-128", ""),
+                                           ("dyn-128", "dyn-128", "")], 1)
+    write("g20_published_drift.txt", [
+        "The published shRing code (shring-8, no race fix) under the cold and hot",
+        "stalls, n = 5, PCM off: does it wedge at 200 Gb/s as at 100 (5 of 10)?",
+        "Then a drift check: four cells of all3 run again with PCM, as g1/g4 were.",
+    ], body)
+
+
+ROUND2 = (gs, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20)
+
+
 def main():
-    for battery in (g0, g1, g2, g3, g4, g5, g6, g7):
+    for battery in (g0, g1, g2, g3, g4, g5, g6, g7) + ROUND2:
         battery()
 
 
