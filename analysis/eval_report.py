@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Tables and figures of the paper-style evaluation (batteries f1-f15, CLAUDE.md 20).
+"""Tables and figures of the paper-style evaluation (batteries f1-f23 at 100 Gb/s,
+CLAUDE.md 20; g0-g20 at 2 x 100 Gb/s on two ports, CLAUDE.md 21).
 
 Reads, from a directory copied off the nodes (searched recursively):
   eval_f*.csv / eval_f*.jsonl   tgen: rate_sweep.py rows and per-window details
   summary.txt                   dut: sweep.sh's block per run (counters, cycles,
                                 occupancy, credits, DRAM per window)
-  pcm-pcie_*.csv                dut: DDIO counters (f2)
+  pcm-pcie_*.csv                dut: DDIO counters (f2, g2)
+  dram_fixed.txt                dut: DRAM per window recomputed with the fixed
+                                pcm-memory parser (21.5); overrides the summary's
+                                DRAM lines of the runs it lists (all3, g8)
+
+With two ports a queue is (port, queue) -- p1q3 in the summary -- and an lcore
+is found from the run: line's lcores= list (port p's queue q on its p*Q+q-th).
 
 Per cell (battery, variable value, system) it reports the trimmed mean of the
 runs (min and max dropped when n >= 4, as both papers do with 10 runs), their
@@ -35,10 +42,11 @@ try:
 except ImportError:
     HdrHistogram = None
 
-LABEL = re.compile(r"^(f\d+)_([^_]+)_([^_]+)_n(\d+)(?:_r\d+)?$")
+LABEL = re.compile(r"^(f\d+|g\d+d?|gs)_([^_]+)_([^_]+)_n(\d+)(?:_r\d+)?$")
 QUEUES = 8
 
-# The queue each battery singles out; the others are its bystanders.
+# The queue each battery singles out; the others are its bystanders. A queue is a
+# number (port 0) or (port, queue); a list gives several (one target per port).
 SPECIAL_QUEUE = {
     "f4": {"cold": 3, "hot": 0, "twob": 3},
     "f5": 3, "f6": 3, "f7": 3, "f13": 3,
@@ -47,6 +55,12 @@ SPECIAL_QUEUE = {
     "f19": {"pv": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
     "f20": {"pv": 3, "switch": 3, "cold": 3, "hot": 0, "twob": 3, "len": 3},
     "f23": {"cold": 3, "tv": 3},
+    # 200 Gb/s: stalls on port 0 only; targets and hot queues on both ports.
+    "g0": {"stall": 3, "pv": [(0, 3), (1, 3)]},
+    "g4": {"cold": 3, "hot": 0, "twob": 3},
+    "g5": [(0, 3), (1, 3)], "g9": 3, "g10": [(0, 3), (1, 3)], "g13": [(0, 3), (1, 3)],
+    "g16": {"hot": [(0, 0), (1, 0)]},
+    "g20": {"cold": 3, "hot": 0}, "g20d": {"cold": 3},
 }
 # Rounds 1-2 (f1-f18) ran the first dyn; the consolidation (CLAUDE.md 20.20)
 # reran their dyn runs at the final defaults, labelled dynfin-*. Shown as
@@ -91,7 +105,7 @@ def system_name(battery, system):
 
 def read_csv_rows(root):
     rows = []
-    for path in find(root, "eval_f*.csv") + find(root, "eval_c*.csv"):
+    for path in find(root, "eval_f*.csv") + find(root, "eval_c*.csv") + find(root, "eval_g*.csv"):
         with open(path, newline="") as f:
             rows += list(csv.DictReader(f))
     return rows
@@ -100,7 +114,8 @@ def read_csv_rows(root):
 def read_details(root):
     """label -> phase -> list of detail records, in file order."""
     details = collections.defaultdict(lambda: collections.defaultdict(list))
-    for path in find(root, "eval_f*.jsonl") + find(root, "eval_c*.jsonl"):
+    for path in (find(root, "eval_f*.jsonl") + find(root, "eval_c*.jsonl")
+                 + find(root, "eval_g*.jsonl")):
         with open(path) as f:
             for line in f:
                 rec = json.loads(line)
@@ -110,8 +125,9 @@ def read_details(root):
 
 SUMMARY_PATTERNS = {
     "missed": re.compile(r"rx_missed_errors=(\d+)\s+rx_phy_packets=(\d+)\s+rx_good_packets=(\d+)"),
-    "queues_rx": re.compile(r"per queue rx:(.*)$"),
-    "queues_tx": re.compile(r"per queue tx:(.*)$"),
+    "queues_rx": re.compile(r"per queue rx(?: \(port (\d+)\))?:(.*)$"),
+    "queues_tx": re.compile(r"per queue tx(?: \(port (\d+)\))?:(.*)$"),
+    "run": re.compile(r"^\s+run: .*\blcores=(\S+)"),
     "cycles": re.compile(r"cycles/pkt over (\d+) pkts: rx ([\d.]+)\s+fwd ([\d.]+)"
                          r"\s+common-ring objects/pkt ([\d.]+)"),
     "lcore_cycles": re.compile(r"CYCLES lcore (\d+): pkts=(\d+) rx_cyc/pkt=([\d.]+) "
@@ -119,14 +135,14 @@ SUMMARY_PATTERNS = {
     "work": re.compile(r"WORK lcore (\d+): accesses=(\d+) work_cyc/pkt=([\d.]+)"),
     "occupancy": re.compile(r"OCCUPANCY lcore (\d+) queue (\d+): samples=(\d+) "
                             r"mean=([\d.]+) max=(\d+)"),
-    "credits": re.compile(r"Rx queue (\d+): FILL credits: budget (\d+) now, (\d+) mean, "
-                          r"(\d+) max"),
+    "credits": re.compile(r"(?:port (\d+) )?Rx queue (\d+): FILL credits: budget (\d+) now, "
+                          r"(\d+) mean, (\d+) max"),
     "dram": re.compile(r"DRAM window (\d+) \(.*?(phase=\w+)?\): n=(\d+) read=([\d.]+) "
                        r"write=([\d.]+)"),
     "contention": re.compile(r"^\s+contention (\d+)"),
     "ndr": re.compile(r"NDR \S+: ([\d.]+)% of line rate = ([\d.]+) Mpps"),
     "stall": re.compile(r"stall_core: (\d+) stalls"),
-    "overloads": re.compile(r"Rx queue (\d+): FILL credits:.*; (\d+) overloads"),
+    "overloads": re.compile(r"(?:port (\d+) )?Rx queue (\d+): FILL credits:.*; (\d+) overloads"),
     "ethtool": re.compile(r"^\s+ethtool:(.*)$"),
 }
 
@@ -141,7 +157,7 @@ def read_summaries(root):
                 m = re.match(r"^== (\S+) \(", line)
                 if m:
                     run = runs[m.group(1)] = {"lcores": {}, "queues": {}, "dram": [],
-                                              "credits": {}}
+                                              "credits": {}, "queue_rx": {}, "queue_tx": {}}
                     continue
                 if run is None:
                     continue
@@ -154,9 +170,11 @@ def parse_summary_line(run, line):
     if (m := p["missed"].search(line)):
         run["rx_missed"], run["phy_good"] = int(m.group(1)), int(m.group(2)) - int(m.group(3))
     elif (m := p["queues_rx"].search(line)):
-        run["queue_rx"] = [int(x) for x in m.group(1).split() if x.isdigit()]
+        run["queue_rx"][int(m.group(1) or 0)] = [int(x) for x in m.group(2).split() if x.isdigit()]
     elif (m := p["queues_tx"].search(line)):
-        run["queue_tx"] = [int(x) for x in m.group(1).split() if x.isdigit()]
+        run["queue_tx"][int(m.group(1) or 0)] = [int(x) for x in m.group(2).split() if x.isdigit()]
+    elif (m := p["run"].search(line)):
+        run["lcore_list"] = expand_list(m.group(1))
     elif (m := p["cycles"].search(line)):
         run["rx_cyc"], run["fwd_cyc"] = float(m.group(2)), float(m.group(3))
         run["ring_objs"] = float(m.group(4))
@@ -166,11 +184,12 @@ def parse_summary_line(run, line):
     elif (m := p["work"].search(line)):
         run["lcores"].setdefault(int(m.group(1)), {}).update(work_cyc=float(m.group(3)))
     elif (m := p["occupancy"].search(line)):
-        run["queues"][int(m.group(2))] = {"occ_mean": float(m.group(4)),
+        # Keyed by lcore: with two ports a queue number names two queues.
+        run["queues"][int(m.group(1))] = {"occ_mean": float(m.group(4)),
                                           "occ_max": int(m.group(5))}
     elif (m := p["credits"].search(line)):
-        run["credits"][int(m.group(1))] = {"budget_mean": int(m.group(3)),
-                                           "budget_max": int(m.group(4))}
+        run["credits"][(int(m.group(1) or 0), int(m.group(2)))] = {
+            "budget_mean": int(m.group(4)), "budget_max": int(m.group(5))}
     elif (m := p["dram"].search(line)):
         run["dram"].append({"phase": (m.group(2) or "phase=sweep")[6:],
                             "read": float(m.group(4)), "write": float(m.group(5))})
@@ -181,9 +200,41 @@ def parse_summary_line(run, line):
     elif (m := p["stall"].search(line)):
         run["stalls"] = int(m.group(1))
     if (m := p["overloads"].search(line)):
-        run.setdefault("overloads", {})[int(m.group(1))] = int(m.group(2))
+        run.setdefault("overloads", {})[(int(m.group(1) or 0), int(m.group(2)))] = int(m.group(3))
     if (m := p["ethtool"].search(line)):
         run["ethtool"] = m.group(1).strip()
+
+
+def expand_list(text):
+    """"0-3,8" -> [0, 1, 2, 3, 8]."""
+    out = []
+    for part in text.split(","):
+        lo, _, hi = part.partition("-")
+        out += list(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def lcore_of(summary, queue):
+    """The lcore that polls (port, queue): one port's lcores are 1-8 (17.1);
+    with two, the run: line lists them, port p's queue q at p * QUEUES + q."""
+    port, q = queue
+    lcores = summary.get("lcore_list")
+    if lcores and port * QUEUES + q < len(lcores):
+        return lcores[port * QUEUES + q]
+    return q + 1 if port == 0 else None
+
+
+def read_dram_fixed(root):
+    """label -> [{phase, read, write}] in window order, from dram_fixed.txt."""
+    fixed = collections.defaultdict(list)
+    pattern = re.compile(r"^(\S+) +[\d.]+% phase=(\w+) n=\d+ read=([\d.]+) write=([\d.]+)")
+    for path in find(root, "dram_fixed.txt"):
+        for line in open(path):
+            m = pattern.match(line)
+            if m:
+                fixed[m.group(1)].append({"phase": m.group(2), "read": float(m.group(3)),
+                                          "write": float(m.group(4))})
+    return fixed
 
 
 def read_ddio(root):
@@ -216,28 +267,30 @@ def read_ddio(root):
 # --- one record per measured window -------------------------------------------------
 
 def special_queue(battery, name):
+    """The battery's special queues as a frozenset of (port, queue), or empty."""
     spec = SPECIAL_QUEUE.get(battery)
     if isinstance(spec, dict):
-        for key, queue in spec.items():
-            if name.startswith(key):
-                return queue
-        return None
-    return spec
+        spec = next((queue for key, queue in spec.items() if name.startswith(key)), None)
+    if spec is None:
+        return frozenset()
+    items = spec if isinstance(spec, list) else [spec]
+    return frozenset(q if isinstance(q, tuple) else (0, q) for q in items)
 
 
 def variable(battery, name, row):
     """The cell's x: a number where the battery sweeps one, else the name."""
-    if battery in ("f3", "f21"):
+    if battery in ("f3", "f21", "g7", "g8", "g17", "g18"):
         return float(row["rate_pct"])
-    if battery == "f7":
+    if battery in ("f7", "g13"):
         return int(re.sub(r"\D", "", name)) / 100.0
     if battery == "f8":
         return name     # mi<k>[p]: plotted by payload and k
     m = re.search(r"(\d+)$", name)
-    return int(m.group(1)) if m and battery in ("f5", "f6", "f10", "f11") else name
+    numeric = ("f5", "f6", "f10", "f11", "g5", "g9", "g10", "g12")
+    return int(m.group(1)) if m and battery in numeric else name
 
 
-def windows(rows, details, summaries, ddio):
+def windows(rows, details, summaries, ddio, dram_fixed=None):
     """Measured windows (phase sweep, or the NDR search's best) as flat records."""
     out = []
     ndr_seen = set()
@@ -272,7 +325,8 @@ def windows(rows, details, summaries, ddio):
         delivered = delivered_gbps(row, rec)
         if delivered is not None:
             rec["gbps"] = delivered
-        add_dut(rec, summary, battery, name, sweep_index[row["label"]])
+        add_dut(rec, summary, battery, name, sweep_index[row["label"]],
+                (dram_fixed or {}).get(row["label"]))
         sweep_index[row["label"]] += 1
         rec["ddio_hit_pct"] = ddio.get(row["label"])
         out.append(rec)
@@ -292,13 +346,14 @@ def add_latency_roles(rec, battery, name, details, phase, rate_pct):
             if d.get("hdrh"):
                 rec["hdrh"]["all"].append(d["hdrh"])
             continue
-        role = "special" if d.get("queue") == special else "bystander"
+        queue = (int(d.get("port") or 0), d.get("queue"))
+        role = "special" if queue in special else "bystander"
         if d.get("hdrh"):
             rec["hdrh"][role].append(d["hdrh"])
         if d.get("tx"):
             lost[role][0] += d["tx"] - (d.get("rx") or 0)
             lost[role][1] += d["tx"]
-            rec["queue_probe_loss"][d["queue"]] = max(d["tx"] - (d.get("rx") or 0), 0) / d["tx"]
+            rec["queue_probe_loss"][queue] = max(d["tx"] - (d.get("rx") or 0), 0) / d["tx"]
         for key in ("p99", "p9999", "max_us"):
             rec.setdefault("%s_%s" % (role, key), [])
             if d.get(key) is not None:
@@ -327,7 +382,12 @@ def delivered_gbps(row, rec):
     """
     sizes = [int(x) for x in row.get("queue_sizes", "").split(",") if x]
     offered = (rec.get("window") or {}).get("queue_offered_est")
-    loss = rec.get("queue_probe_loss", {})
+    # Offered packets are summed over the ports (rate_sweep.py); so is each queue's
+    # loss here, as the mean over the ports of its probes' loss.
+    by_queue = collections.defaultdict(list)
+    for (_, q), lost in rec.get("queue_probe_loss", {}).items():
+        by_queue[q].append(lost)
+    loss = {q: statistics.mean(v) for q, v in by_queue.items()}
     if len(sizes) != QUEUES or not offered or len(loss) < QUEUES:
         return None
     bits = sum(n * (1 - loss.get(q, 0.0)) * (size + 24) * 8
@@ -335,9 +395,9 @@ def delivered_gbps(row, rec):
     return bits / float(row["duration_s"]) / 1e9
 
 
-def add_dut(rec, summary, battery, name, index):
+def add_dut(rec, summary, battery, name, index, dram_fixed=None):
     """`index`: which measured window of the run this is (f3 has one per rate)."""
-    dram = [d for d in summary.get("dram", []) if d["phase"] == "sweep"]
+    dram = [d for d in (dram_fixed or summary.get("dram", [])) if d["phase"] == "sweep"]
     if index < len(dram):
         rec["dram_write"], rec["dram_read"] = dram[index]["write"], dram[index]["read"]
     for key in ("rx_cyc", "fwd_cyc", "ring_objs", "rx_missed", "phy_good", "contention",
@@ -345,20 +405,21 @@ def add_dut(rec, summary, battery, name, index):
         rec[key] = summary.get(key)
     if summary.get("overloads"):    # each queue's line is printed twice; keyed by queue
         rec["overloads"] = sum(summary["overloads"].values())
-    occ = summary.get("queues", {})
+    special = [lcore_of(summary, q) for q in sorted(special_queue(battery, name))]
+    occ = summary.get("queues", {})     # keyed by lcore
     if occ:
         rec["occ_mean"] = statistics.mean(q["occ_mean"] for q in occ.values())
         rec["occ_max"] = max(q["occ_max"] for q in occ.values())
-        special = special_queue(battery, name)
-        if special in occ:
-            rec["special_occ_mean"] = occ[special]["occ_mean"]
+        found = [occ[l]["occ_mean"] for l in special if l in occ]
+        if found:
+            rec["special_occ_mean"] = statistics.mean(found)
     credits = summary.get("credits", {})
-    if credits:     # the driver prints each queue's line twice; keyed by queue
+    if credits:     # the driver prints each queue's line twice; keyed by (port, queue)
         rec["posted_mean"] = sum(c["budget_mean"] for c in credits.values())
     lcores = summary.get("lcores", {})
-    special = special_queue(battery, name)
-    if special is not None and special + 1 in lcores:
-        rec["special_fwd_cyc"] = lcores[special + 1].get("fwd_cyc")
+    found = [lcores[l]["fwd_cyc"] for l in special if l in lcores and "fwd_cyc" in lcores[l]]
+    if found:
+        rec["special_fwd_cyc"] = statistics.mean(found)
 
 
 # --- cells ------------------------------------------------------------------------
@@ -407,7 +468,15 @@ def cells(records):
         # Over 20% lost: shRing wedged (19.25) or blocked by a slow core (f6).
         cell["collapsed"] = sum(1 for r in runs if (r.get("loss_pct") or 0) > 20)
         out.append(cell)
-    return sorted(out, key=lambda c: (int(c["battery"][1:]), sort_x(c["x"]), system_rank(c["system"])))
+    return sorted(out, key=lambda c: (battery_rank(c["battery"]), sort_x(c["x"]),
+                                      system_rank(c["system"])))
+
+
+def battery_rank(battery):
+    """f1 < f23 < g0 < gs < g9 < g20 < g20d: letter, number, suffix."""
+    m = re.match(r"([a-z])(\d*)(\D*)$", battery)
+    letter, number, suffix = m.groups()
+    return (letter, int(number) if number else 0.5, suffix)
 
 
 def sort_x(x):
@@ -676,11 +745,12 @@ def main():
               "(pip install hdrhistogram)", file=sys.stderr)
 
     records = windows(read_csv_rows(args.data), read_details(args.data),
-                      read_summaries(args.data), read_ddio(args.data))
+                      read_summaries(args.data), read_ddio(args.data),
+                      read_dram_fixed(args.data))
     if args.battery:
         records = [r for r in records if r["battery"] in args.battery]
     if not records:
-        sys.exit("no f-battery runs found under %s" % args.data)
+        sys.exit("no f- or g-battery runs found under %s" % args.data)
     table = cells(records)
     print_tables(table)
     if args.out:
@@ -689,6 +759,11 @@ def main():
                 for r in records]
         write_csv(os.path.join(args.out, "runs.csv"), flat)
         write_csv(os.path.join(args.out, "cells.csv"), table)
+        try:
+            import matplotlib  # noqa: F401
+        except ImportError:
+            print("wrote %s/runs.csv and cells.csv (no matplotlib: no figures)" % args.out)
+            return
         figures(table, records, args.out)
         print("wrote %s/runs.csv, cells.csv and figures" % args.out)
 
